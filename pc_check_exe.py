@@ -178,6 +178,23 @@ def send_to_bot(data):
 
 # ======================== MAIN ========================
 
+def win_input(prompt):
+    """Windows console input that works with PyInstaller."""
+    try:
+        from ctypes import windll, c_wchar_p, get_wstring
+        import sys
+
+        # Enable console mode
+        kernel32 = windll.kernel32
+        kernel32.SetConsoleMode(kernel32.GetStdHandle(-10), 0x4)  # ENABLE_LINE_INPUT
+
+        print(prompt, end="", flush=True)
+        buf = c_wchar_p()
+        kernel32.ReadConsoleW(kernel32.GetStdHandle(-10), buf, 256, None, None)
+        return buf.value.strip()
+    except:
+        return input(prompt)
+
 def main():
     # Create console window on Windows
     try:
@@ -191,23 +208,45 @@ def main():
     print("=" * 45, flush=True)
     print(flush=True)
 
-    # Parse arguments: CHECK_ID USER_ID
-    args = sys.argv
-    if len(args) > 1:
-        CHECK_ID = args[1]
-    else:
-        CHECK_ID = ""
-    if len(args) > 2:
-        USER_ID = args[2]
-    else:
-        USER_ID = ""
+    # Terms agreement
+    print("TERMS OF AGREEMENT", flush=True)
+    print("-" * 45, flush=True)
+    print("By running this tool, you agree to:", flush=True)
+    print("  - Your system information being collected", flush=True)
+    print("  - IP address being logged for security", flush=True)
+    print("  - Results being reviewed by server staff", flush=True)
+    print("  - Being banned if cheating software detected", flush=True)
+    print("-" * 45, flush=True)
+    print(flush=True)
 
-    if len(args) < 3 or not CHECK_ID or not USER_ID:
-        print("Usage: PCCheck.exe <CHECK_ID> <USER_ID>", flush=True)
-        print(flush=True)
-        print("This tool should be launched automatically.", flush=True)
+    agree = win_input("Type AGREE to accept and continue: ").strip().upper()
+    print(flush=True)
+
+    if agree != "AGREE":
+        print("Agreement not accepted. Exiting.", flush=True)
         import time
-        time.sleep(5)
+        time.sleep(2)
+        sys.exit(0)
+
+    # Get Check ID
+    print("-" * 45, flush=True)
+    CHECK_ID = win_input("Enter Check ID: ").strip()
+    print(flush=True)
+
+    if not CHECK_ID:
+        print("Check ID is required. Exiting.", flush=True)
+        import time
+        time.sleep(2)
+        sys.exit(1)
+
+    # Get Discord User ID
+    USER_ID = win_input("Enter Discord User ID: ").strip()
+    print(flush=True)
+
+    if not USER_ID:
+        print("Discord User ID is required. Exiting.", flush=True)
+        import time
+        time.sleep(2)
         sys.exit(1)
 
     print(f"Check ID: {CHECK_ID}", flush=True)

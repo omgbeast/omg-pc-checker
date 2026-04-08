@@ -1068,12 +1068,14 @@ def webhookReceiver():
 
         # Post to PC Check channel
         pc_channel_id = config.get("pc_check_channel_id", 0)
+        staff_role_id = config.get("staff_role_id", 0)
         if pc_channel_id:
             pc_channel = bot.get_channel(pc_channel_id)
             if pc_channel:
                 view = PCCheckActionView(check_id)
+                staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
                 asyncio.run_coroutine_threadsafe(
-                    pc_channel.send(content=f"<@{user_id}> PC check received!", embed=embed, view=view),
+                    pc_channel.send(content=f"{staff_mention}<@{user_id}> PC check received!", embed=embed, view=view),
                     bot.loop
                 )
 
