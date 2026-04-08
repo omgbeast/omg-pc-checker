@@ -147,20 +147,20 @@ def check_suspicious_processes():
 
 def scan_suspicious_files():
     """Scan PC for suspicious files in common locations."""
+    # Only scan for actual hack executables and DLLs, not legitimate software
     suspicious_names = [
         "cheatengine", "cheat engine", "artmoney", "gamecih",
         "vape", "novoline", "igg", "injector",
         "aimbot", "wallhack", "triggerbot", "radar",
-        "exploit", "hack", "cheat", "trainer"
+        "exploit", "cheat", "hacktool", "trainer"
     ]
 
-    suspicious_extensions = [".exe", ".dll", ".asi"]
+    # Only these extensions for actual hacks
+    suspicious_extensions = [".exe", ".dll"]
 
-    # Common locations to scan
+    # Common locations to scan - focus on user-accessible folders
     scan_paths = [
-        os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), ""),
-        os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), ""),
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), ""),
         os.path.join(os.environ.get("APPDATA", ""), ""),
         os.path.join(os.environ.get("ProgramData", "C:\\ProgramData"), ""),
     ]
@@ -176,27 +176,27 @@ def scan_suspicious_files():
         try:
             for root, dirs, files in os.walk(base_path):
                 # Skip certain system folders
-                if any(skip in root.lower() for skip in ["windows\\temp", "cache", "\\.git"]):
+                if any(skip in root.lower() for skip in ["\\microsoft\\", "\\windows\\", "\\python", "\\git", "\\node_modules", "\\.cache"]):
                     continue
 
                 for file in files:
                     scanned_count += 1
-                    if scanned_count % 10000 == 0:
+                    if scanned_count % 5000 == 0:
                         print(f"  Checked {scanned_count} files...", flush=True)
 
                     file_lower = file.lower()
                     ext = os.path.splitext(file)[1].lower()
 
-                    # Check if suspicious name or extension
-                    is_suspicious = any(sus in file_lower for sus in suspicious_names)
-                    is_suspicious_ext = ext in suspicious_extensions and any(sus in file_lower for sus in ["cheat", "hack", "trainer", "mod", "inject"])
+                    # Check if suspicious name AND suspicious extension
+                    is_suspicious_name = any(sus in file_lower for sus in suspicious_names)
+                    is_suspicious_ext = ext in suspicious_extensions
 
-                    if is_suspicious or is_suspicious_ext:
+                    if is_suspicious_name and is_suspicious_ext:
                         full_path = os.path.join(root, file)
                         found_files.append(full_path)
 
-                # Limit scan depth
-                if len(found_files) > 50:
+                # Limit scan depth and results
+                if len(found_files) > 20 or scanned_count > 100000:
                     break
         except:
             continue
