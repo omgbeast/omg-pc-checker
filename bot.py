@@ -500,15 +500,15 @@ class PCCheckActionView(discord.ui.View):
         super().__init__(timeout=None)
         self.check_id = check_id
 
-    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id=f"pccheck_approve")
+    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id=f"pccheck_approve_{check_id}")
     async def approve(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "APPROVED")
 
-    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id=f"pccheck_reject")
+    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id=f"pccheck_reject_{check_id}")
     async def reject(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "REJECTED")
 
-    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id=f"pccheck_moreinfo")
+    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id=f"pccheck_moreinfo_{check_id}")
     async def more_info(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "NEEDS_INFO")
 
@@ -814,22 +814,6 @@ class PCBOT(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-
-    async def on_interaction(self, interaction: discord.Interaction):
-        # Handle PC check button clicks
-        if interaction.data.get("custom_id", "").startswith("pccheck_"):
-            custom_id = interaction.data["custom_id"]
-            check_id = custom_id.replace("pccheck_approve", "").replace("pccheck_reject", "").replace("pccheck_moreinfo", "")
-
-            # Determine action from original custom_id
-            if "approve" in custom_id:
-                action = "APPROVED"
-            elif "reject" in custom_id:
-                action = "REJECTED"
-            else:
-                action = "NEEDS_INFO"
-
-            await handle_check_action(interaction, check_id, action)
 
 bot = PCBOT()
 
