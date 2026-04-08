@@ -15,9 +15,9 @@ from pymongo import MongoClient
 
 mongo_uri = os.environ.get("MONGODB_URI")
 db_client = MongoClient(mongo_uri) if mongo_uri else None
-db = db_client["pc_checker"] if db_client else None
-guilds_collection = db["guilds"] if db else None
-checks_collection = db["checks"] if db else None
+db = db_client["pc_checker"] if db_client is not None else None
+guilds_collection = db["guilds"] if db is not None else None
+checks_collection = db["checks"] if db is not None else None
 
 # ============================================================
 # DATA STORAGE FUNCTIONS (MongoDB)
@@ -1075,7 +1075,7 @@ def main():
 
     if not token:
         print("ERROR: DISCORD_BOT_TOKEN environment variable not set!")
-        print("Please set it in Render dashboard → Environment → Environment Variables")
+        print("Please set it in Render dashboard -> Environment -> Environment Variables")
         return
 
     # Start Flask server in background thread
