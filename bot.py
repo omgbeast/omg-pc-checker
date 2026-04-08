@@ -828,6 +828,15 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
             inline=False
         )
         dm_embed.add_field(
+            name="Terms Agreement",
+            value="By running this tool, you agree to:\n"
+                  "• Your system information being collected\n"
+                  "• IP address being logged for security\n"
+                  "• Results being reviewed by server staff\n"
+                  "• Being banned if cheating software is detected",
+            inline=False
+        )
+        dm_embed.add_field(
             name="Instructions",
             value="1. Download the tool above\n"
                   "2. Run the downloaded .exe file\n"
@@ -990,6 +999,17 @@ def webhookReceiver():
         # Get guild config
         config = get_guild_config(guild_id)
 
+        # Check for suspicious processes and VM
+        suspicious = data.get('suspicious_processes', [])
+        is_vm = data.get('is_vm', False)
+
+        # Determine status based on findings
+        if is_vm or suspicious:
+            # Flag for review if VM or suspicious processes found
+            new_status = "NEEDS_INFO"
+        else:
+            new_status = "PENDING"
+
         # Update check with system info
         update_check(check_id, {
             "hostname": data.get('hostname'),
@@ -1000,23 +1020,26 @@ def webhookReceiver():
             "ram": data.get('ram'),
             "mac_address": data.get('mac_address'),
             "public_ip": data.get('public_ip'),
-            "is_vm": data.get('is_vm'),
+            "is_vm": is_vm,
             "vm_indicator": data.get('vm_indicator'),
-            "suspicious_processes": data.get('suspicious_processes', []),
+            "suspicious_processes": suspicious,
             "gpu_driver": data.get('gpu_driver'),
-            "status": "PENDING",  # Keep as pending until staff reviews
+            "status": new_status,
         })
 
         # Create embed from EXE data
         embed = discord.Embed(
             title="PC Verification Check",
-            color=discord.Color.orange(),
+            color=discord.Color.orange() if new_status == "NEEDS_INFO" else discord.Color.blue(),
             timestamp=datetime.now()
         )
 
         embed.add_field(name="User", value=f"<@{user_id}>", inline=True)
         embed.add_field(name="Check ID", value=check_id, inline=True)
-        embed.add_field(name="Status", value="⏳ RECEIVED - Pending Review", inline=True)
+
+        status_text = "🔍 NEEDS REVIEW - Suspicious software detected" if new_status == "NEEDS_INFO" else "⏳ RECEIVED - Pending Review"
+        embed.add_field(name="Status", value=status_text, inline=True)
+
         embed.add_field(name="Hostname", value=data.get('hostname', 'N/A'), inline=True)
         embed.add_field(name="Username", value=data.get('username', 'N/A'), inline=True)
         embed.add_field(name="OS", value=data.get('os_version', 'N/A'), inline=False)
@@ -1024,18 +1047,20 @@ def webhookReceiver():
         embed.add_field(name="GPU", value=data.get('gpu', 'N/A'), inline=True)
         embed.add_field(name="RAM", value=data.get('ram', 'N/A'), inline=True)
         embed.add_field(name="MAC", value=data.get('mac_address', 'N/A'), inline=True)
-        embed.add_field(name="Public IP", value=data.get('public_ip', 'N/A'), inline=True)
+        # Public IP hidden for privacy
 
-        # Check for warnings
+        # Warnings section
         warnings = []
-        if data.get('is_vm'):
+        if is_vm:
             warnings.append(f"🚨 VM Detected: {data.get('vm_indicator', 'Unknown')}")
-        if data.get('suspicious_processes'):
-            procs = ", ".join(data['suspicious_processes'][:3])
-            warnings.append(f"⚠️ Suspicious: {procs}")
+        if suspicious:
+            proc_list = "\n".join([f"  - `{p}`" for p in suspicious])
+            warnings.append(f"⚠️ Suspicious Software Found:\n{proc_list}")
 
         if warnings:
-            embed.add_field(name="Warnings", value="\n".join(warnings), inline=False)
+            embed.add_field(name="⚠️ Warnings", value="\n".join(warnings), inline=False)
+        else:
+            embed.add_field(name="✅ Checks Passed", value="No VM or suspicious software detected", inline=False)
 
         embed.set_footer(text=f"Check ID: {check_id}")
 
