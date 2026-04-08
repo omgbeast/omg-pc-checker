@@ -1125,12 +1125,14 @@ def webhookReceiver():
     """Receive PC check data from EXE and post to channel."""
     try:
         data = request.get_json()
+        print(f"Webhook received: {data}")
 
         check_id = data.get('check_id', 'UNKNOWN')
         user_id = data.get('user_id', '0')
 
         # Look up the check to find guild_id
         check_data = get_check(check_id)
+        print(f"Check data for {check_id}: {check_data}")
 
         if not check_data:
             return "Check not found", 404
@@ -1141,6 +1143,11 @@ def webhookReceiver():
 
         # Get guild config
         config = get_guild_config(guild_id)
+        print(f"Config for guild {guild_id}: {config}")
+
+        # Get channel ID
+        pc_channel_id = config.get("pc_check_channel_id", 0)
+        print(f"PC Channel ID: {pc_channel_id}")
 
         # Check for suspicious processes and VM
         suspicious = data.get('suspicious_processes', [])
@@ -1215,10 +1222,11 @@ def webhookReceiver():
         embed.set_footer(text=f"Check ID: {check_id}")
 
         # Post to PC Check channel
-        pc_channel_id = config.get("pc_check_channel_id", 0)
         staff_role_id = config.get("staff_role_id", 0)
+        print(f"Posting to channel {pc_channel_id}, staff role: {staff_role_id}")
         if pc_channel_id:
             pc_channel = bot.get_channel(pc_channel_id)
+            print(f"Channel object: {pc_channel}")
             if pc_channel:
                 view = PCCheckActionView(check_id)
                 staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
@@ -1226,6 +1234,10 @@ def webhookReceiver():
                     pc_channel.send(content=f"{staff_mention}<@{user_id}> PC check received!", embed=embed, view=view),
                     bot.loop
                 )
+            else:
+                print("Channel not found!")
+        else:
+            print("No channel ID configured!")
 
         return "OK", 200
 
