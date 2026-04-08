@@ -1038,7 +1038,7 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
         pc_channel = bot.get_channel(pc_channel_id)
         if pc_channel:
             embed = create_pc_check_embed(check_data)
-            view = create_check_action_view(check_id)
+            view = PersistentCheckView()
             staff_role_id = config.get("staff_role_id", 0)
             staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
             await pc_channel.send(
@@ -1244,17 +1244,16 @@ def webhookReceiver():
 
         embed.set_footer(text=f"Check ID: {check_id}")
 
-        # Post to PC Check channel
+        # Post to PC Check channel - don't attach view, Discord will use registered PersistentCheckView
         staff_role_id = config.get("staff_role_id", 0)
         print(f"Posting to channel {pc_channel_id}, staff role: {staff_role_id}")
         if pc_channel_id:
             pc_channel = bot.get_channel(pc_channel_id)
             print(f"Channel object: {pc_channel}")
             if pc_channel:
-                view = PersistentCheckView()
                 staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
                 asyncio.run_coroutine_threadsafe(
-                    pc_channel.send(content=f"{staff_mention}<@{user_id}> PC check received!", embed=embed, view=view),
+                    pc_channel.send(content=f"{staff_mention}<@{user_id}> PC check received!", embed=embed),
                     bot.loop
                 )
             else:
@@ -1280,6 +1279,9 @@ async def on_ready():
     print(f"Commands synced: Yes")
     print(f"Database: {'MongoDB Connected' if db_client else 'MongoDB NOT CONNECTED (no URI)'}")
     print(f"{'='*50}\n")
+
+    # Register persistent views so Discord can route button interactions
+    bot.add_view(PersistentCheckView())
 
 def main():
     # Bot token is set via environment variable on Render
