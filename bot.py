@@ -217,6 +217,31 @@ class ConfigView(discord.ui.View):
             ephemeral=True
         )
 
+    @discord.ui.button(label="Show Current Config", style=discord.ButtonStyle.primary, emoji="📋", custom_id="cfg_show_config")
+    async def cfg_show_config(self, interaction, button):
+        config = get_guild_config(interaction.guild.id)
+
+        embed = discord.Embed(
+            title="Current Configuration",
+            color=discord.Color.blue()
+        )
+
+        pc_channel = self.bot.get_channel(config.get("pc_check_channel_id", 0))
+        log_channel = self.bot.get_channel(config.get("log_channel_id", 0))
+        staff_role = interaction.guild.get_role(config.get("staff_role_id", 0))
+        approved_role = interaction.guild.get_role(config.get("approved_role_id", 0))
+        rejected_role = interaction.guild.get_role(config.get("rejected_role_id", 0))
+        pending_role = interaction.guild.get_role(config.get("pending_role_id", 0))
+
+        embed.add_field(name="PC Check Channel", value=pc_channel.mention if pc_channel else "Not Set", inline=True)
+        embed.add_field(name="Log Channel", value=log_channel.mention if log_channel else "Not Set", inline=True)
+        embed.add_field(name="Staff Role", value=staff_role.mention if staff_role else "Not Set", inline=True)
+        embed.add_field(name="Approved Role", value=approved_role.mention if approved_role else "Not Set", inline=True)
+        embed.add_field(name="Rejected Role", value=rejected_role.mention if rejected_role else "Not Set", inline=True)
+        embed.add_field(name="Pending Role", value=pending_role.mention if pending_role else "Not Set", inline=True)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
 class ConfigModal(discord.ui.Modal):
     def __init__(self, bot, key, title, placeholder, is_password=False, is_list=False):
         super().__init__(title=title)
