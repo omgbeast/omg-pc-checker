@@ -657,7 +657,7 @@ def create_pc_check_embed(data: dict) -> discord.Embed:
 
     # Network
     embed.add_field(name="MAC Address", value=data.get("mac_address", "N/A"), inline=True)
-    embed.add_field(name="Public IP", value=data.get("public_ip", "N/A"), inline=True)
+    # Public IP hidden for privacy
 
     # Warnings
     warnings = []
@@ -665,11 +665,13 @@ def create_pc_check_embed(data: dict) -> discord.Embed:
         warnings.append(f"🚨 Virtual Machine: {data.get('vm_indicator', 'Detected')}")
 
     if data.get("suspicious_processes"):
-        procs = ", ".join(data["suspicious_processes"][:5])
-        warnings.append(f"⚠️ Suspicious: {procs}")
+        proc_list = "\n".join([f"  - `{p}`" for p in data["suspicious_processes"][:10]])
+        warnings.append(f"⚠️ Suspicious Software:\n{proc_list}")
 
     if warnings:
-        embed.add_field(name="Warnings", value="\n".join(warnings), inline=False)
+        embed.add_field(name="⚠️ Warnings", value="\n".join(warnings), inline=False)
+    else:
+        embed.add_field(name="✅ Checks Passed", value="No VM or suspicious software detected", inline=False)
 
     # Analysis based on status
     if status == "PENDING":
