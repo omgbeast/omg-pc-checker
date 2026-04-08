@@ -940,6 +940,9 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
         )
         return
 
+    # Defer the response immediately to avoid timeout
+    await interaction.response.defer(ephemeral=True)
+
     # Generate check ID
     check_id = str(uuid.uuid4())[:8]
     download_url = config.get("download_url", "")
@@ -998,12 +1001,12 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
             upsert=True
         )
 
-    # Confirm immediately to avoid interaction timeout
+    # Confirm after defer
     confirm_msg = f"✅ PC check request sent!"
     confirm_msg += f"\n• DM sent to {user.mention}"
     confirm_msg += f"\n• Check ID: `{check_id}`"
 
-    await interaction.response.send_message(confirm_msg, ephemeral=True)
+    await interaction.followup.send(confirm_msg, ephemeral=True)
 
     # Send DM to user asking for agreement (after response)
     try:
