@@ -83,19 +83,11 @@ class ConfigView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="Webhook URL", style=discord.ButtonStyle.secondary, emoji="🔗", custom_id="cfg_webhook")
-    async def cfg_webhook(self, interaction, button):
-        await interaction.response.send_modal(ConfigModal(self.bot, "webhook_url", "Webhook URL", "Enter Discord webhook URL", False))
-
-    @discord.ui.button(label="Download URL", style=discord.ButtonStyle.secondary, emoji="📥", custom_id="cfg_download")
-    async def cfg_download(self, interaction, button):
-        await interaction.response.send_modal(ConfigModal(self.bot, "download_url", "Download URL", "Enter EXE download URL", False))
-
     @discord.ui.button(label="PC Check Channel", style=discord.ButtonStyle.secondary, emoji="📁", custom_id="cfg_pc_channel")
     async def cfg_pc_channel(self, interaction, button):
         await interaction.response.send_message(
             "Select PC Check Channel:",
-            view=ChannelSelectView(self.bot, "pc_check_channel_id"),
+            view=ChannelSelectView(self.bot, "pc_check_channel_id", interaction.guild),
             ephemeral=True
         )
 
@@ -103,7 +95,7 @@ class ConfigView(discord.ui.View):
     async def cfg_log_channel(self, interaction, button):
         await interaction.response.send_message(
             "Select Log Channel:",
-            view=ChannelSelectView(self.bot, "log_channel_id"),
+            view=ChannelSelectView(self.bot, "log_channel_id", interaction.guild),
             ephemeral=True
         )
 
@@ -111,7 +103,7 @@ class ConfigView(discord.ui.View):
     async def cfg_staff_role(self, interaction, button):
         await interaction.response.send_message(
             "Select Staff Role:",
-            view=RoleSelectView(self.bot, "staff_role_id"),
+            view=RoleSelectView(self.bot, "staff_role_id", interaction.guild),
             ephemeral=True
         )
 
@@ -158,16 +150,13 @@ class ConfigModal(discord.ui.Modal):
 
 
 class ChannelSelectView(discord.ui.View):
-    def __init__(self, bot, config_key):
+    def __init__(self, bot, config_key, guild):
         super().__init__(timeout=60)
         self.bot = bot
         self.config_key = config_key
 
         # Get text channels
-        if interaction.guild:
-            channels = interaction.guild.text_channels
-        else:
-            channels = []
+        channels = guild.text_channels if guild else []
 
         options = [
             discord.SelectOption(label=c.name, value=str(c.id))
@@ -175,34 +164,29 @@ class ChannelSelectView(discord.ui.View):
         ]
 
         if options:
-            select = discord.ui.Select(placeholder="Select a channel...", options=options)
-            select.callback = self.on_select
+            select = discord.ui.Select(placeholder="Select a channel...", options=options, custom_id="channel_select")
+            async def callback(interaction):
+                config = load_config()
+                channel_id = int(interaction.data['values'][0])
+                config[self.config_key] = channel_id
+                save_config(config)
+                channel = self.bot.get_channel(channel_id)
+                await interaction.response.send_message(
+                    f"✅ Set to #{channel.name}" if channel else f"✅ Set to ID: {channel_id}",
+                    ephemeral=True
+                )
+            select.callback = callback
             self.add_item(select)
-
-    async def on_select(self, interaction):
-        config = load_config()
-        channel_id = int(interaction.values[0])
-        config[self.config_key] = channel_id
-        save_config(config)
-
-        channel = self.bot.get_channel(channel_id)
-        await interaction.response.send_message(
-            f"✅ Set to #{channel.name}" if channel else f"✅ Set to ID: {channel_id}",
-            ephemeral=True
-        )
 
 
 class RoleSelectView(discord.ui.View):
-    def __init__(self, bot, config_key):
+    def __init__(self, bot, config_key, guild):
         super().__init__(timeout=60)
         self.bot = bot
         self.config_key = config_key
 
         # Get roles (excluding @everyone)
-        if interaction.guild:
-            roles = [r for r in interaction.guild.roles if r.name != "@everyone"]
-        else:
-            roles = []
+        roles = [r for r in guild.roles if r.name != "@everyone"] if guild else []
 
         options = [
             discord.SelectOption(label=r.name, value=str(r.id))
@@ -210,21 +194,19 @@ class RoleSelectView(discord.ui.View):
         ]
 
         if options:
-            select = discord.ui.Select(placeholder="Select a role...", options=options)
-            select.callback = self.on_select
+            select = discord.ui.Select(placeholder="Select a role...", options=options, custom_id="role_select")
+            async def callback(interaction):
+                config = load_config()
+                role_id = int(interaction.data['values'][0])
+                config[self.config_key] = role_id
+                save_config(config)
+                role = interaction.guild.get_role(role_id)
+                await interaction.response.send_message(
+                    f"✅ Set to @{role.name}" if role else f"✅ Set to ID: {role_id}",
+                    ephemeral=True
+                )
+            select.callback = callback
             self.add_item(select)
-
-    async def on_select(self, interaction):
-        config = load_config()
-        role_id = int(interaction.values[0])
-        config[self.config_key] = role_id
-        save_config(config)
-
-        role = interaction.guild.get_role(role_id)
-        await interaction.response.send_message(
-            f"✅ Set to @{role.name}" if role else f"✅ Set to ID: {role_id}",
-            ephemeral=True
-        )
 
 class ConfigChannelModal(discord.ui.Modal):
     def __init__(self, bot, key, title):
@@ -866,6 +848,106 @@ async def pccheck_help(interaction: discord.Interaction):
 # MAIN
 # ============================================================
 
+import threading
+from flask import Flask, request
+import json as json_lib
+
+# Flask app for receiving EXE data
+flask_app = Flask(__name__)
+
+@flask_app.route('/webhook', methods=['POST'])
+def webhookReceiver():
+    """Receive PC check data from EXE and post to channel."""
+    try:
+        data = request.get_json()
+
+        check_id = data.get('check_id', 'UNKNOWN')
+        user_id = data.get('user_id', '0')
+
+        # Create embed from EXE data
+        embed = discord.Embed(
+            title="PC Verification Check",
+            color=discord.Color.orange(),
+            timestamp=datetime.now()
+        )
+
+        embed.add_field(name="User", value=f"<@{user_id}>", inline=True)
+        embed.add_field(name="Check ID", value=check_id, inline=True)
+        embed.add_field(name="Status", value="⏳ RECEIVED - Pending Review", inline=True)
+        embed.add_field(name="Hostname", value=data.get('hostname', 'N/A'), inline=True)
+        embed.add_field(name="Username", value=data.get('username', 'N/A'), inline=True)
+        embed.add_field(name="OS", value=data.get('os_version', 'N/A'), inline=False)
+        embed.add_field(name="CPU", value=data.get('cpu', 'N/A'), inline=False)
+        embed.add_field(name="GPU", value=data.get('gpu', 'N/A'), inline=True)
+        embed.add_field(name="RAM", value=data.get('ram', 'N/A'), inline=True)
+        embed.add_field(name="MAC", value=data.get('mac_address', 'N/A'), inline=True)
+        embed.add_field(name="Public IP", value=data.get('public_ip', 'N/A'), inline=True)
+
+        # Check for warnings
+        warnings = []
+        if data.get('is_vm'):
+            warnings.append(f"🚨 VM Detected: {data.get('vm_indicator', 'Unknown')}")
+        if data.get('suspicious_processes'):
+            procs = ", ".join(data['suspicious_processes'][:3])
+            warnings.append(f"⚠️ Suspicious: {procs}")
+
+        if warnings:
+            embed.add_field(name="Warnings", value="\n".join(warnings), inline=False)
+
+        embed.set_footer(text=f"Check ID: {check_id}")
+
+        # Save the check data
+        requests = load_requests()
+        requests[check_id] = {
+            "check_id": check_id,
+            "user_id": user_id,
+            "username": data.get('username', 'Unknown'),
+            "status": "PENDING",
+            "created_at": datetime.now().isoformat(),
+            "hostname": data.get('hostname'),
+            "username": data.get('username'),
+            "os_version": data.get('os_version'),
+            "cpu": data.get('cpu'),
+            "gpu": data.get('gpu'),
+            "ram": data.get('ram'),
+            "mac_address": data.get('mac_address'),
+            "public_ip": data.get('public_ip'),
+            "is_vm": data.get('is_vm'),
+            "vm_indicator": data.get('vm_indicator'),
+            "suspicious_processes": data.get('suspicious_processes', []),
+        }
+        save_requests(requests)
+
+        # Also save to user data
+        all_data = load_check_data()
+        all_data[user_id] = {
+            "status": "PENDING",
+            "check_id": check_id,
+            "hostname": data.get('hostname'),
+        }
+        save_check_data(all_data)
+
+        # Post to PC Check channel
+        config = load_config()
+        pc_channel_id = config.get("pc_check_channel_id", 0)
+        if pc_channel_id:
+            pc_channel = bot.get_channel(pc_channel_id)
+            if pc_channel:
+                view = PCCheckActionView(check_id)
+                asyncio.run_coroutine_threadsafe(
+                    pc_channel.send(content=f"<@{user_id}> PC check received!", embed=embed, view=view),
+                    bot.loop
+                )
+
+        return "OK", 200
+
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return "Error", 500
+
+def run_flask():
+    flask_app.run(host='0.0.0.0', port=10000)
+
 @bot.event
 async def on_ready():
     print(f"\n{'='*50}")
@@ -887,8 +969,13 @@ def main():
 
     # Create config file if doesn't exist
     config = load_config()
-    if not config.get("webhook_url"):
+    if not config.get("pc_check_channel_id"):
         save_config(get_default_config())
+
+    # Start Flask server in background thread
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    print("Web server started on port 5000")
 
     bot.run(token)
 

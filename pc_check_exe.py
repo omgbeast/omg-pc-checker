@@ -136,8 +136,8 @@ def check_suspicious_processes():
 # ======================== SEND TO DISCORD ========================
 
 def send_to_discord(data, webhook_url):
-    if not webhook_url or webhook_url == "YOUR_WEBHOOK_URL":
-        return False, "Webhook URL not configured"
+    if not webhook_url or webhook_url == "YOUR_BOT_URL":
+        return False, "Bot URL not configured"
 
     try:
         embed = {
@@ -232,8 +232,8 @@ def main():
         input("\nPress Enter to exit...")
         sys.exit(1)
 
-    if not WEBHOOK_URL or WEBHOOK_URL == "YOUR_WEBHOOK_URL":
-        print("ERROR: Webhook URL not configured!")
+    if not WEBHOOK_URL or WEBHOOK_URL == "YOUR_BOT_URL":
+        print("ERROR: Bot URL not configured!")
         print("Please contact staff for the correct tool.")
         input("\nPress Enter to exit...")
         sys.exit(1)
