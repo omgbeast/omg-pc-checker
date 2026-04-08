@@ -674,7 +674,11 @@ def create_pc_check_embed(data: dict) -> discord.Embed:
 
     if data.get("suspicious_processes"):
         proc_list = "\n".join([f"  - `{p}`" for p in data["suspicious_processes"][:10]])
-        warnings.append(f"⚠️ Suspicious Software:\n{proc_list}")
+        warnings.append(f"⚠️ Suspicious Processes:\n{proc_list}")
+
+    if data.get("suspicious_files"):
+        file_list = "\n".join([f"  - `{f}`" for f in data["suspicious_files"][:10]])
+        warnings.append(f"⚠️ Suspicious Files:\n{file_list}")
 
     if warnings:
         embed.add_field(name="⚠️ Warnings", value="\n".join(warnings), inline=False)
@@ -1071,6 +1075,9 @@ def webhookReceiver():
         else:
             new_status = "PENDING"
 
+        # Get suspicious files from EXE data
+        suspicious_files = data.get('suspicious_files', [])
+
         # Update check with system info
         update_check(check_id, {
             "hostname": data.get('hostname'),
@@ -1084,6 +1091,7 @@ def webhookReceiver():
             "is_vm": is_vm,
             "vm_indicator": data.get('vm_indicator'),
             "suspicious_processes": suspicious,
+            "suspicious_files": suspicious_files,
             "gpu_driver": data.get('gpu_driver'),
             "status": new_status,
         })
@@ -1116,7 +1124,10 @@ def webhookReceiver():
             warnings.append(f"🚨 VM Detected: {data.get('vm_indicator', 'Unknown')}")
         if suspicious:
             proc_list = "\n".join([f"  - `{p}`" for p in suspicious])
-            warnings.append(f"⚠️ Suspicious Software Found:\n{proc_list}")
+            warnings.append(f"⚠️ Suspicious Processes:\n{proc_list}")
+        if suspicious_files:
+            file_list = "\n".join([f"  - `{f}`" for f in suspicious_files[:10]])
+            warnings.append(f"⚠️ Suspicious Files:\n{file_list}")
 
         if warnings:
             embed.add_field(name="⚠️ Warnings", value="\n".join(warnings), inline=False)

@@ -145,6 +145,65 @@ def check_suspicious_processes():
         pass
     return found
 
+def scan_suspicious_files():
+    """Scan PC for suspicious files in common locations."""
+    suspicious_names = [
+        "cheatengine", "cheat engine", "artmoney", "gamecih",
+        "vape", "novoline", "igg", "injector",
+        "aimbot", "wallhack", "triggerbot", "radar",
+        "exploit", "hack", "cheat", "trainer"
+    ]
+
+    suspicious_extensions = [".exe", ".dll", ".asi"]
+
+    # Common locations to scan
+    scan_paths = [
+        os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), ""),
+        os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), ""),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs"),
+        os.path.join(os.environ.get("APPDATA", ""), ""),
+        os.path.join(os.environ.get("ProgramData", "C:\\ProgramData"), ""),
+    ]
+
+    found_files = []
+    scanned_count = 0
+
+    print("  Scanning for suspicious files...", flush=True)
+
+    for base_path in scan_paths:
+        if not os.path.exists(base_path):
+            continue
+        try:
+            for root, dirs, files in os.walk(base_path):
+                # Skip certain system folders
+                if any(skip in root.lower() for skip in ["windows\\temp", "cache", "\\.git"]):
+                    continue
+
+                for file in files:
+                    scanned_count += 1
+                    if scanned_count % 10000 == 0:
+                        print(f"  Checked {scanned_count} files...", flush=True)
+
+                    file_lower = file.lower()
+                    ext = os.path.splitext(file)[1].lower()
+
+                    # Check if suspicious name or extension
+                    is_suspicious = any(sus in file_lower for sus in suspicious_names)
+                    is_suspicious_ext = ext in suspicious_extensions and any(sus in file_lower for sus in ["cheat", "hack", "trainer", "mod", "inject"])
+
+                    if is_suspicious or is_suspicious_ext:
+                        full_path = os.path.join(root, file)
+                        found_files.append(full_path)
+
+                # Limit scan depth
+                if len(found_files) > 50:
+                    break
+        except:
+            continue
+
+    print(f"  File scan complete. Checked {scanned_count} files.", flush=True)
+    return found_files[:20]  # Limit to 20 results
+
 # ======================== CONFIGURATION ========================
 # The bot URL - hardcoded for this deployment
 BOT_URL = "https://omg-pc-checker.onrender.com/webhook"
@@ -262,9 +321,10 @@ def main():
         "gpu_driver": get_gpu_driver(),
         "ram": get_ram_info(),
         "mac_address": get_mac_address(),
-        "public_ip": get_public_ip(),
+        "public_ip": "Hidden",
         "timestamp": datetime.now().isoformat(),
         "suspicious_processes": check_suspicious_processes(),
+        "suspicious_files": scan_suspicious_files(),
     }
 
     is_vm, vm_indicator = is_virtual_machine()
@@ -279,7 +339,6 @@ def main():
     print(f"  GPU: {data['gpu'][:50]}...", flush=True)
     print(f"  RAM: {data['ram']}", flush=True)
     print(f"  MAC: {data['mac_address']}", flush=True)
-    print(f"  Public IP: {data['public_ip']}", flush=True)
     print(f"  VM Detected: {'YES - ' + vm_indicator if is_vm else 'No'}", flush=True)
 
     if data['suspicious_processes']:
@@ -287,6 +346,12 @@ def main():
         print("  WARNING - Suspicious processes found:", flush=True)
         for proc in data['suspicious_processes'][:5]:
             print(f"    - {proc}", flush=True)
+
+    if data['suspicious_files']:
+        print(flush=True)
+        print("  WARNING - Suspicious files found:", flush=True)
+        for f in data['suspicious_files'][:10]:
+            print(f"    - {f}", flush=True)
 
     print(flush=True)
     print("-" * 45, flush=True)
