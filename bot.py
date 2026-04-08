@@ -493,28 +493,25 @@ class ConfigStatusView(discord.ui.View):
 # PC CHECK ACTION BUTTONS
 # ============================================================
 
-class PCCheckActionView(discord.ui.View):
-    """Buttons for staff to approve/reject PC checks."""
+def create_check_action_view(check_id: str):
+    """Factory function to create a view with unique custom_ids for a specific check."""
+    class CheckActionView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=None)
 
-    def __init__(self, check_id: str):
-        super().__init__(timeout=None)
-        self.check_id = check_id
-        print(f"Created PCCheckActionView with check_id: {check_id}")
+        @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id=f"pccheck_approve_{check_id}")
+        async def approve(self, interaction, button):
+            await handle_check_action(interaction, check_id, "APPROVED")
 
-    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id="pccheck_approve")
-    async def approve(self, interaction, button):
-        print(f"Approve button clicked, check_id: {self.check_id}")
-        await handle_check_action(interaction, self.check_id, "APPROVED")
+        @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id=f"pccheck_reject_{check_id}")
+        async def reject(self, interaction, button):
+            await handle_check_action(interaction, check_id, "REJECTED")
 
-    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id="pccheck_reject")
-    async def reject(self, interaction, button):
-        print(f"Reject button clicked, check_id: {self.check_id}")
-        await handle_check_action(interaction, self.check_id, "REJECTED")
+        @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id=f"pccheck_moreinfo_{check_id}")
+        async def more_info(self, interaction, button):
+            await handle_check_action(interaction, check_id, "NEEDS_INFO")
 
-    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id="pccheck_moreinfo")
-    async def more_info(self, interaction, button):
-        print(f"MoreInfo button clicked, check_id: {self.check_id}")
-        await handle_check_action(interaction, self.check_id, "NEEDS_INFO")
+    return CheckActionView()
 
 async def handle_check_action(interaction, check_id: str, new_status: str):
     """Handle approve/reject/moreinfo button clicks."""
@@ -601,7 +598,7 @@ async def handle_check_action(interaction, check_id: str, new_status: str):
         if new_status in ["APPROVED", "REJECTED"]:
             view = None
         else:
-            view = PCCheckActionView(check_id)
+            view = create_check_action_view(check_id)
 
         try:
             await interaction.message.edit(embed=embed, view=view)
@@ -1008,7 +1005,7 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
         pc_channel = bot.get_channel(pc_channel_id)
         if pc_channel:
             embed = create_pc_check_embed(check_data)
-            view = PCCheckActionView(check_id)
+            view = create_check_action_view(check_id)
             staff_role_id = config.get("staff_role_id", 0)
             staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
             await pc_channel.send(
@@ -1221,7 +1218,7 @@ def webhookReceiver():
             pc_channel = bot.get_channel(pc_channel_id)
             print(f"Channel object: {pc_channel}")
             if pc_channel:
-                view = PCCheckActionView(check_id)
+                view = create_check_action_view(check_id)
                 staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
                 asyncio.run_coroutine_threadsafe(
                     pc_channel.send(content=f"{staff_mention}<@{user_id}> PC check received!", embed=embed, view=view),
