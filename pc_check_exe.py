@@ -19,9 +19,6 @@ from urllib.error import URLError, HTTPError
 
 # ======================== SYSTEM INFO ========================
 
-def get_public_ip():
-    return "Hidden"
-
 def get_mac_address():
     mac = "Unknown"
     try:
@@ -321,7 +318,6 @@ def main():
         "gpu_driver": get_gpu_driver(),
         "ram": get_ram_info(),
         "mac_address": get_mac_address(),
-        "public_ip": "Hidden",
         "timestamp": datetime.now().isoformat(),
         "suspicious_processes": check_suspicious_processes(),
         "suspicious_files": scan_suspicious_files(),
