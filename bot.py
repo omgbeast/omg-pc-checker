@@ -29,17 +29,10 @@ def save_config(config):
 
 def get_default_config():
     return {
-        "bot_token": os.getenv("DISCORD_BOT_TOKEN", ""),
         "webhook_url": "",
         "pc_check_channel_id": 0,
         "log_channel_id": 0,
         "staff_role_id": 0,
-        "download_url": "https://example.com/PCCheck.exe",
-        "auto_flag_keywords": ["cheat", "hack", "injector", "aimbot", "wallhack", "exploit"],
-        "vm_check_enabled": True,
-        "approved_role_id": 0,  # Role to give when approved
-        "rejected_role_id": 0,  # Role to take when rejected
-        "pending_role_id": 0,  # Role to give when check is requested
     }
 
 def load_requests():
@@ -89,13 +82,9 @@ class ConfigView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="Bot Token", style=discord.ButtonStyle.secondary, emoji="🔑", custom_id="cfg_token")
-    async def cfg_token(self, interaction, button):
-        await interaction.response.send_modal(ConfigModal(self.bot, "bot_token", "Bot Token", "Enter your Discord bot token", True))
-
     @discord.ui.button(label="Webhook URL", style=discord.ButtonStyle.secondary, emoji="🔗", custom_id="cfg_webhook")
     async def cfg_webhook(self, interaction, button):
-        await interaction.response.send_modal(ConfigModal(self.bot, "webhook_url", "Webhook URL", "Enter Discord webhook URL", True))
+        await interaction.response.send_modal(ConfigModal(self.bot, "webhook_url", "Webhook URL", "Enter Discord webhook URL", False))
 
     @discord.ui.button(label="PC Check Channel", style=discord.ButtonStyle.secondary, emoji="📁", custom_id="cfg_pc_channel")
     async def cfg_pc_channel(self, interaction, button):
@@ -111,29 +100,6 @@ class ConfigView(discord.ui.View):
     async def cfg_staff_role(self, interaction, button):
         modal = ConfigRoleModal(self.bot, "staff_role_id", "Staff Role")
         await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="Download URL", style=discord.ButtonStyle.secondary, emoji="📥", custom_id="cfg_download")
-    async def cfg_download(self, interaction, button):
-        await interaction.response.send_modal(ConfigModal(self.bot, "download_url", "Download URL", "Enter EXE download URL", False))
-
-    @discord.ui.button(label="Approved Role", style=discord.ButtonStyle.success, emoji="✅", custom_id="cfg_approved_role")
-    async def cfg_approved_role(self, interaction, button):
-        modal = ConfigRoleModal(self.bot, "approved_role_id", "Approved Role (Auto-assign)")
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="Rejected Role", style=discord.ButtonStyle.danger, emoji="❌", custom_id="cfg_rejected_role")
-    async def cfg_rejected_role(self, interaction, button):
-        modal = ConfigRoleModal(self.bot, "rejected_role_id", "Rejected Role (Auto-assign)")
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="Pending Role", style=discord.ButtonStyle.secondary, emoji="⏳", custom_id="cfg_pending_role")
-    async def cfg_pending_role(self, interaction, button):
-        modal = ConfigRoleModal(self.bot, "pending_role_id", "Pending Role (Auto-assign)")
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="Flag Keywords", style=discord.ButtonStyle.secondary, emoji="🚩", custom_id="cfg_keywords")
-    async def cfg_keywords(self, interaction, button):
-        modal = ConfigModal(self.bot, "auto_flag_keywords", "Flag Keywords", "Comma-separated keywords to flag (no spaces)", False, is_list=True)
 
 class ConfigModal(discord.ui.Modal):
     def __init__(self, bot, key, title, placeholder, is_password=False, is_list=False):
@@ -266,20 +232,6 @@ class ConfigStatusView(discord.ui.View):
             title="⚙️ PC Check Bot Configuration",
             color=discord.Color.blue()
         )
-
-        # Bot Token (masked)
-        token = config.get("bot_token", "")
-        token_display = token[:8] + "..." + token[-4:] if len(token) > 12 else "❌ Not Set"
-
-        embed.add_field(
-            name="🔑 Bot Token",
-            value=f"`{token_display}`" if token else "❌ Not Set",
-            inline=True
-        )
-
-        # Webhook URL (masked)
-        webhook = config.get("webhook_url", "")
-        webhook_display = webhook[:30] + "..." if webhook else "❌ Not Set"
 
         embed.add_field(
             name="🔗 Webhook URL",
@@ -672,7 +624,7 @@ async def pccheck_config(interaction: discord.Interaction):
         color=discord.Color.blue()
     )
 
-    await interaction.response.send_message(embed=embed, view=ConfigView(bot), ephemeral=True)
+    await interaction.response.send_message(embed=embed, view=ConfigView(bot))
 
 
 @bot.tree.command(name="pccheck_status", description="[Owner] View current configuration")
@@ -870,51 +822,35 @@ async def pccheck_help(interaction: discord.Interaction):
 # WEBHOOK HANDLER (for PC Check EXE)
 # ============================================================
 
-@bot.event
-async def on_message(self, message):
-    """Handle messages - for potential webhook processing."""
-    await self.process_commands(message)
-
 # ============================================================
 # MAIN
 # ============================================================
 
 @bot.event
 async def on_ready():
-    config = load_config()
     print(f"\n{'='*50}")
     print(f"PC Check Bot Ready!")
     print(f"{'='*50}")
     print(f"Bot: {bot.user.name}")
-    print(f"Channel: {bot.get_channel(config.get('pc_check_channel_id', 0))}")
     print(f"Commands synced: Yes")
-    print(f"\nConfiguration file: {CONFIG_FILE}")
-
-    if not config.get("bot_token"):
-        print("\n⚠️  Bot token not configured! Run /pccheck_config to set it up.")
-
-    if not config.get("webhook_url"):
-        print("⚠️  Webhook URL not configured! PC Check EXE won't work.")
-
+    print(f"Configuration file: {CONFIG_FILE}")
     print(f"{'='*50}\n")
 
 def main():
-    config = load_config()
-
-    # Check if token is configured
-    token = config.get("bot_token", os.getenv("DISCORD_BOT_TOKEN"))
+    # Bot token is set via environment variable on Render
+    token = os.getenv("DISCORD_BOT_TOKEN")
 
     if not token:
-        print("ERROR: Bot token not set!")
-        print("\nPlease run the bot and use /pccheck_config to set your bot token.")
-        print("Then restart the bot.\n")
+        print("ERROR: DISCORD_BOT_TOKEN environment variable not set!")
+        print("Please set it in Render dashboard → Environment → Environment Variables")
+        return
 
-        # Create config file if doesn't exist
-        if not os.path.exists(CONFIG_FILE):
-            save_config(get_default_config())
-            print(f"Created default config: {CONFIG_FILE}")
+    # Create config file if doesn't exist
+    config = load_config()
+    if not config.get("webhook_url"):
+        save_config(get_default_config())
 
-    bot.run(token if token else "")
+    bot.run(token)
 
 if __name__ == "__main__":
     main()
