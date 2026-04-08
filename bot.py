@@ -792,12 +792,13 @@ class PCBOT(commands.Bot):
                     )
                     embed.add_field(
                         name="Instructions",
-                        value="1. Download the tool above\n"
-                              "2. Run the downloaded .exe file\n"
-                              "3. Type AGREE when prompted\n"
-                              "4. Enter your Check ID and Discord User ID\n"
-                              "5. Wait for it to finish (auto-closes)\n"
-                              "6. Your results will be sent automatically",
+                        value=f"1. Download the tool above\n"
+                              f"2. Run the downloaded .exe file\n"
+                              f"3. Type AGREE when prompted\n"
+                              f"4. Enter Check ID: `{pending['check_id']}`\n"
+                              f"5. Enter Discord User ID: `{message.author.id}`\n"
+                              f"6. Wait for it to finish (auto-closes)\n"
+                              f"7. Your results will be sent automatically",
                         inline=False
                     )
                     embed.add_field(
