@@ -865,7 +865,28 @@ async def pccheck_status(interaction: discord.Interaction):
         )
         return
 
-    await interaction.response.send_message("Loading configuration...", view=ConfigStatusView(bot), ephemeral=True)
+    config = get_guild_config(interaction.guild.id)
+
+    embed = discord.Embed(
+        title="PC Check Bot Configuration",
+        color=discord.Color.blue()
+    )
+
+    pc_channel = bot.get_channel(config.get("pc_check_channel_id", 0))
+    log_channel = bot.get_channel(config.get("log_channel_id", 0))
+    staff_role = interaction.guild.get_role(config.get("staff_role_id", 0))
+    approved_role = interaction.guild.get_role(config.get("approved_role_id", 0))
+    rejected_role = interaction.guild.get_role(config.get("rejected_role_id", 0))
+    pending_role = interaction.guild.get_role(config.get("pending_role_id", 0))
+
+    embed.add_field(name="PC Check Channel", value=pc_channel.mention if pc_channel else "Not Set", inline=True)
+    embed.add_field(name="Log Channel", value=log_channel.mention if log_channel else "Not Set", inline=True)
+    embed.add_field(name="Staff Role", value=staff_role.mention if staff_role else "Not Set", inline=True)
+    embed.add_field(name="Approved Role", value=approved_role.mention if approved_role else "Not Set", inline=True)
+    embed.add_field(name="Rejected Role", value=rejected_role.mention if rejected_role else "Not Set", inline=True)
+    embed.add_field(name="Pending Role", value=pending_role.mention if pending_role else "Not Set", inline=True)
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 @bot.tree.command(name="send_pc_check", description="[Staff] Send PC check request to a user")
