@@ -766,6 +766,11 @@ class PCBOT(commands.Bot):
 
         # Check if user has pending agreement
         if pending_agreements is not None:
+            # Clean up expired agreements (older than 24 hours)
+            from datetime import timedelta
+            cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+            pending_agreements.delete_many({"created_at": {"$lt": cutoff}})
+
             pending = pending_agreements.find_one({"_id": user_id})
             if pending:
                 if message.content.strip().upper() == "AGREE":
@@ -935,6 +940,33 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
     if pending_agreements is not None:
         # Remove any existing pending agreement for this user
         pending_agreements.delete_one({"_id": str(user.id)})
+
+        # Check if user has existing check and remove their old roles
+        existing_checks = checks_collection.find({"user_id": str(user.id)})
+        for old_check in existing_checks:
+            if old_check.get("status") == "APPROVED":
+                approved_role_id = config.get("approved_role_id", 0)
+                if approved_role_id:
+                    member = interaction.guild.get_member(user.id)
+                    if member:
+                        try:
+                            role = interaction.guild.get_role(approved_role_id)
+                            if role and role in member.roles:
+                                await member.remove_roles(role)
+                        except:
+                            pass
+            elif old_check.get("status") == "REJECTED":
+                rejected_role_id = config.get("rejected_role_id", 0)
+                if rejected_role_id:
+                    member = interaction.guild.get_member(user.id)
+                    if member:
+                        try:
+                            role = interaction.guild.get_role(rejected_role_id)
+                            if role and role in member.roles:
+                                await member.remove_roles(role)
+                        except:
+                            pass
+
         pending_agreements.insert_one({
             "_id": str(user.id),
             "check_id": check_id,
