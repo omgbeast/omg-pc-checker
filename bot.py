@@ -933,6 +933,8 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
 
     # Store pending agreement
     if pending_agreements is not None:
+        # Remove any existing pending agreement for this user
+        pending_agreements.delete_one({"_id": str(user.id)})
         pending_agreements.insert_one({
             "_id": str(user.id),
             "check_id": check_id,
