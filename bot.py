@@ -87,17 +87,24 @@ def get_check(check_id: str) -> dict:
     if checks_collection is None:
         return None
 
-    return checks_collection.find_one({"_id": check_id})
+    try:
+        return checks_collection.find_one({"_id": check_id})
+    except Exception as e:
+        print(f"Error finding check {check_id}: {e}")
+        return None
 
 def update_check(check_id: str, updates: dict):
     """Update a check in database."""
     if checks_collection is None:
         return
 
-    checks_collection.update_one(
-        {"_id": check_id},
-        {"$set": updates}
-    )
+    try:
+        checks_collection.update_one(
+            {"_id": check_id},
+            {"$set": updates}
+        )
+    except Exception as e:
+        print(f"Error updating check: {e}")
 
 def get_user_checks(guild_id: str, user_id: str) -> list:
     """Get all checks for a user in a guild."""
