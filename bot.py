@@ -416,6 +416,47 @@ class ConfigRoleModal(discord.ui.Modal):
             ephemeral=True
         )
 
+class InfoRequestModal(discord.ui.Modal):
+    """Modal to collect more info from user when Request Info is clicked."""
+    def __init__(self, check_id, original_message):
+        super().__init__(title="Request More Information")
+        self.check_id = check_id
+        self.original_message = original_message
+
+        self.info_text = discord.ui.TextInput(
+            label="What information do you need?",
+            placeholder="e.g., Please explain why cheat engine is running...",
+            required=True,
+            style=discord.TextStyle.long,
+            max_length=500
+        )
+        self.add_item(self.info_text)
+
+    async def callback(self, interaction):
+        info_requested = self.info_text.value.strip()
+
+        # Update the check as NEEDS_INFO with the request message
+        update_check(self.check_id, {
+            "status": "NEEDS_INFO",
+            "info_request": info_requested,
+        })
+
+        # Update the original message embed
+        check_data = get_check(self.check_id)
+        if check_data:
+            check_data["status"] = "NEEDS_INFO"
+            embed = create_pc_check_embed(check_data)
+            view = PersistentCheckView()
+            try:
+                await self.original_message.edit(embed=embed, view=view)
+            except:
+                pass
+
+        await interaction.response.send_message(
+            f"🔍 Info request sent to user!",
+            ephemeral=True
+        )
+
 class ConfigStatusView(discord.ui.View):
     """Show current configuration status."""
 
@@ -737,9 +778,11 @@ def create_pc_check_embed(data: dict) -> discord.Embed:
             inline=False
         )
     elif status == "NEEDS_INFO":
+        info_req = data.get("info_request", "")
+        req_text = f"\n📝 **Request:** {info_req}" if info_req else ""
         embed.add_field(
             name="Action Required",
-            value="Staff requested more information from this user.",
+            value=f"Staff requested more information from this user.{req_text}",
             inline=False
         )
 
@@ -852,10 +895,13 @@ class PersistentCheckView(discord.ui.View):
 
     @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id="pccheck_moreinfo")
     async def more_info(self, interaction, button):
+        # Extract check_id from the message footer
         footer = interaction.message.embeds[0].footer.text if interaction.message.embeds else ""
         check_id = footer.replace("Check ID: ", "").strip() if footer else None
         if check_id:
-            await handle_check_action(interaction, check_id, "NEEDS_INFO")
+            # Send a modal to ask for info request
+            modal = InfoRequestModal(check_id, interaction.message)
+            await interaction.response.send_modal(modal)
         else:
             await interaction.response.send_message("Error: Check ID not found", ephemeral=True)
 
