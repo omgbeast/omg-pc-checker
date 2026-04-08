@@ -418,22 +418,23 @@ class ConfigRoleModal(discord.ui.Modal):
 
 class InfoRequestModal(discord.ui.Modal):
     """Modal to collect more info from user when Request Info is clicked."""
-    def __init__(self, check_id, original_message):
+    def __init__(self, check_id, original_message, suspicious_files):
         super().__init__(title="Request More Information")
         self.check_id = check_id
         self.original_message = original_message
+        self.suspicious_files = suspicious_files
 
-        self.info_text = discord.ui.TextInput(
-            label="What information do you need?",
-            placeholder="e.g., Please explain why cheat engine is running...",
+        self.info_select = discord.ui.TextInput(
+            label="Select or describe the issue",
+            placeholder="Select from dropdown OR type custom message...",
             required=True,
             style=discord.TextStyle.long,
             max_length=500
         )
-        self.add_item(self.info_text)
+        self.add_item(self.info_select)
 
     async def callback(self, interaction):
-        info_requested = self.info_text.value.strip()
+        info_requested = self.info_select.value.strip()
 
         # Update the check as NEEDS_INFO with the request message
         update_check(self.check_id, {
@@ -454,6 +455,98 @@ class InfoRequestModal(discord.ui.Modal):
 
         await interaction.response.send_message(
             f"🔍 Info request sent to user!",
+            ephemeral=True
+        )
+
+class InfoRequestSelect(discord.ui.View):
+    """View with dropdown of suspicious files and text input."""
+    def __init__(self, check_id, original_message, suspicious_files):
+        super().__init__(timeout=None)
+        self.check_id = check_id
+        self.original_message = original_message
+
+        # Create select dropdown with suspicious files
+        options = []
+        for f in suspicious_files[:20]:
+            filename = f.split("\\")[-1] if "\\" in f else f.split("/")[-1]
+            options.append(discord.SelectOption(label=filename, value=f))
+
+        # Add a "custom" option
+        options.append(discord.SelectOption(label="Custom message", value="__custom__"))
+
+        self.reason_select = discord.ui.Select(
+            placeholder="Select suspicious file(s)...",
+            options=options,
+            custom_id="reason_select"
+        )
+        self.add_item(self.reason_select)
+
+    async def callback(self, interaction):
+        selected = self.reason_select.values[0] if self.reason_select.values else ""
+
+        if selected == "__custom__":
+            # Show a followup modal for custom text
+            modal = CustomInfoModal(self.check_id, self.original_message)
+            await interaction.response.send_modal(modal)
+        else:
+            # Use the selected file path as the reason
+            filename = selected.split("\\")[-1] if "\\" in selected else selected
+            reason = f"Suspicious file found: {filename}"
+
+            update_check(self.check_id, {
+                "status": "NEEDS_INFO",
+                "info_request": reason,
+            })
+
+            check_data = get_check(self.check_id)
+            if check_data:
+                check_data["status"] = "NEEDS_INFO"
+                embed = create_pc_check_embed(check_data)
+                view = PersistentCheckView()
+                try:
+                    await self.original_message.edit(embed=embed, view=view)
+                except:
+                    pass
+
+            await interaction.response.send_message(
+                f"🔍 Info request sent! Reason: {reason}",
+                ephemeral=True
+            )
+
+class CustomInfoModal(discord.ui.Modal):
+    """Modal for custom info request message."""
+    def __init__(self, check_id, original_message):
+        super().__init__(title="Custom Info Request")
+        self.check_id = check_id
+        self.original_message = original_message
+
+        self.custom_text = discord.ui.TextInput(
+            label="What information do you need?",
+            placeholder="Type your question to the user...",
+            required=True,
+            style=discord.TextStyle.long,
+            max_length=500
+        )
+        self.add_item(self.custom_text)
+
+    async def callback(self, interaction):
+        update_check(self.check_id, {
+            "status": "NEEDS_INFO",
+            "info_request": self.custom_text.value.strip(),
+        })
+
+        check_data = get_check(self.check_id)
+        if check_data:
+            check_data["status"] = "NEEDS_INFO"
+            embed = create_pc_check_embed(check_data)
+            view = PersistentCheckView()
+            try:
+                await self.original_message.edit(embed=embed, view=view)
+            except:
+                pass
+
+        await interaction.response.send_message(
+            f"🔍 Info request sent!",
             ephemeral=True
         )
 
@@ -899,9 +992,17 @@ class PersistentCheckView(discord.ui.View):
         footer = interaction.message.embeds[0].footer.text if interaction.message.embeds else ""
         check_id = footer.replace("Check ID: ", "").strip() if footer else None
         if check_id:
-            # Send a modal to ask for info request
-            modal = InfoRequestModal(check_id, interaction.message)
-            await interaction.response.send_modal(modal)
+            # Get the suspicious files from the check
+            check_data = get_check(check_id)
+            suspicious_files = check_data.get("suspicious_files", []) if check_data else []
+
+            # Show a select view with suspicious files
+            view = InfoRequestSelect(check_id, interaction.message, suspicious_files)
+            await interaction.response.send_message(
+                "Select the suspicious file you found or choose custom message:",
+                view=view,
+                ephemeral=True
+            )
         else:
             await interaction.response.send_message("Error: Check ID not found", ephemeral=True)
 
@@ -1221,19 +1322,16 @@ def webhookReceiver():
         pc_channel_id = config.get("pc_check_channel_id", 0)
         print(f"PC Channel ID: {pc_channel_id}")
 
-        # Check for suspicious processes and VM
+        # Check for suspicious processes, files, and VM
         suspicious = data.get('suspicious_processes', [])
+        suspicious_files = data.get('suspicious_files', [])
         is_vm = data.get('is_vm', False)
 
-        # Determine status based on findings
-        if is_vm or suspicious:
-            # Flag for review if VM or suspicious processes found
+        # Determine status based on findings - flag for review if anything suspicious found
+        if is_vm or suspicious or suspicious_files:
             new_status = "NEEDS_INFO"
         else:
             new_status = "PENDING"
-
-        # Get suspicious files from EXE data
-        suspicious_files = data.get('suspicious_files', [])
 
         # Update check with system info
         update_check(check_id, {
