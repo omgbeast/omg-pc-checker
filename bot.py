@@ -18,6 +18,7 @@ db_client = MongoClient(mongo_uri) if mongo_uri else None
 db = db_client["pc_checker"] if db_client is not None else None
 guilds_collection = db["guilds"] if db is not None else None
 checks_collection = db["checks"] if db is not None else None
+pending_agreements = db["pending_agreements"] if db is not None else None
 
 # ============================================================
 # DATA STORAGE FUNCTIONS (MongoDB)
@@ -720,7 +721,63 @@ class PCBOT(commands.Bot):
         intents.message_content = True
         intents.guilds = True
         intents.members = True
+        intents.dm_messages = True  # Enable DM messages
         super().__init__(command_prefix="!", intents=intents)
+
+    async def on_message(self, message: discord.Message):
+        # Only handle DMs
+        if not isinstance(message.channel, discord.DMChannel):
+            return
+
+        # Ignore bot messages
+        if message.author.bot:
+            return
+
+        user_id = str(message.author.id)
+
+        # Check if user has pending agreement
+        if pending_agreements is not None:
+            pending = pending_agreements.find_one({"_id": user_id})
+            if pending:
+                if message.content.strip().upper() == "AGREE":
+                    # User agreed, send download link
+                    pending_agreements.delete_one({"_id": user_id})
+
+                    config = get_guild_config(pending["guild_id"])
+                    download_url = config.get("download_url", "")
+
+                    embed = discord.Embed(
+                        title="✅ Agreement Accepted",
+                        description="Here is your download link:",
+                        color=discord.Color.green()
+                    )
+                    embed.add_field(
+                        name="Download Tool",
+                        value=f"[Click here to download PC Check Tool]({download_url})" if download_url else "❌ Download URL not configured",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="Instructions",
+                        value="1. Download the tool above\n"
+                              "2. Run the downloaded .exe file\n"
+                              "3. Type AGREE when prompted\n"
+                              "4. Enter your Check ID and Discord User ID\n"
+                              "5. Wait for it to finish (auto-closes)\n"
+                              "6. Your results will be sent automatically",
+                        inline=False
+                    )
+                    embed.add_field(
+                        name="Check ID",
+                        value=f"`{pending['check_id']}`",
+                        inline=False
+                    )
+                    await message.channel.send(embed=embed)
+                else:
+                    await message.channel.send("Please type **AGREE** to receive the download link.")
+                return
+
+        # Let other commands process
+        await bot.process_commands(message)
 
     async def setup_hook(self):
         await self.tree.sync()
@@ -824,7 +881,16 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
     # Save to database
     create_check(check_data)
 
-    # Send DM to user with download link
+    # Store pending agreement
+    if pending_agreements is not None:
+        pending_agreements.insert_one({
+            "_id": str(user.id),
+            "check_id": check_id,
+            "guild_id": str(interaction.guild.id),
+            "created_at": datetime.now().isoformat(),
+        })
+
+    # Send DM to user asking for agreement
     try:
         dm_embed = discord.Embed(
             title="🔍 PC Verification Required",
@@ -832,26 +898,12 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
             color=discord.Color.orange()
         )
         dm_embed.add_field(
-            name="Download Tool",
-            value=f"[Click here to download PC Check Tool]({download_url})" if download_url else "❌ Download URL not configured",
-            inline=False
-        )
-        dm_embed.add_field(
             name="Terms Agreement",
             value="By running this tool, you agree to:\n"
                   "• Your system information being collected\n"
-                  "• IP address being logged for security\n"
                   "• Results being reviewed by server staff\n"
-                  "• Being banned if cheating software is detected",
-            inline=False
-        )
-        dm_embed.add_field(
-            name="Instructions",
-            value="1. Download the tool above\n"
-                  "2. Run the downloaded .exe file\n"
-                  "3. Wait for it to finish (auto-closes)\n"
-                  "4. Your results will be sent automatically\n"
-                  "5. Use `/check_status` to check your verification",
+                  "• Being banned if cheating software is detected\n\n"
+                  "**Type AGREE to receive the download link.**",
             inline=False
         )
         dm_embed.add_field(
@@ -1028,7 +1080,7 @@ def webhookReceiver():
             "gpu": data.get('gpu'),
             "ram": data.get('ram'),
             "mac_address": data.get('mac_address'),
-            "public_ip": data.get('public_ip'),
+            # public_ip hidden for privacy
             "is_vm": is_vm,
             "vm_indicator": data.get('vm_indicator'),
             "suspicious_processes": suspicious,

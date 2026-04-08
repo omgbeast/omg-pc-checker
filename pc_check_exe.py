@@ -20,12 +20,7 @@ from urllib.error import URLError, HTTPError
 # ======================== SYSTEM INFO ========================
 
 def get_public_ip():
-    try:
-        req = Request("https://api.ipify.org", headers={"User-Agent": "PCCheck/1.0"})
-        with urlopen(req, timeout=10) as response:
-            return response.read().decode('utf-8')
-    except:
-        return "Unable to get"
+    return "Hidden"
 
 def get_mac_address():
     mac = "Unknown"
