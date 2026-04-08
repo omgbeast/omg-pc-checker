@@ -1247,16 +1247,17 @@ def webhookReceiver():
 
         embed.set_footer(text=f"Check ID: {check_id}")
 
-        # Post to PC Check channel - don't attach view, Discord will use registered PersistentCheckView
+        # Post to PC Check channel
         staff_role_id = config.get("staff_role_id", 0)
         print(f"Posting to channel {pc_channel_id}, staff role: {staff_role_id}")
         if pc_channel_id:
             pc_channel = bot.get_channel(pc_channel_id)
             print(f"Channel object: {pc_channel}")
             if pc_channel:
+                view = PersistentCheckView()
                 staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
                 asyncio.run_coroutine_threadsafe(
-                    pc_channel.send(content=f"{staff_mention}<@{user_id}> PC check received!", embed=embed),
+                    pc_channel.send(content=f"{staff_mention}<@{user_id}> PC check received!", embed=embed, view=view),
                     bot.loop
                 )
             else:
