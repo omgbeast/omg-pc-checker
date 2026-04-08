@@ -517,14 +517,12 @@ async def handle_check_action(interaction, check_id: str, new_status: str):
 
     config = get_guild_config(interaction.guild.id)
 
-    # Check permissions
+    # Check permissions - require staff role
     user = interaction.user
     staff_role_id = config.get("staff_role_id", 0)
 
     has_permission = False
-    if user.guild_permissions.manage_messages:
-        has_permission = True
-    elif staff_role_id and any(role.id == staff_role_id for role in user.roles):
+    if staff_role_id and any(role.id == staff_role_id for role in user.roles):
         has_permission = True
 
     if not has_permission:
@@ -902,13 +900,11 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
 
     config = get_guild_config(interaction.guild.id)
 
-    # Check permissions
+    # Check permissions - require staff role
     staff_role_id = config.get("staff_role_id", 0)
     has_permission = False
 
-    if interaction.user.guild_permissions.manage_messages:
-        has_permission = True
-    elif staff_role_id and any(role.id == staff_role_id for role in interaction.user.roles):
+    if staff_role_id and any(role.id == staff_role_id for role in interaction.user.roles):
         has_permission = True
 
     if not has_permission:
