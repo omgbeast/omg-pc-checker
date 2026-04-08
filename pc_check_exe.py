@@ -133,54 +133,18 @@ def check_suspicious_processes():
         pass
     return found
 
-# ======================== SEND TO DISCORD ========================
+# ======================== CONFIGURATION ========================
+# The bot URL - hardcoded for this deployment
+BOT_URL = "https://omg-pc-checker.onrender.com/webhook"
+# ============================================================
 
-def send_to_discord(data, webhook_url):
-    if not webhook_url or webhook_url == "YOUR_BOT_URL":
-        return False, "Bot URL not configured"
-
+def send_to_bot(data):
+    """Send data to the bot's webhook endpoint."""
     try:
-        embed = {
-            "title": "PC Verification Check",
-            "color": 16776960,
-            "fields": [
-                {"name": "User", "value": f"<@{data['user_id']}>", "inline": True},
-                {"name": "Check ID", "value": data.get('check_id', 'N/A'), "inline": True},
-                {"name": "Status", "value": "PENDING - Awaiting Review", "inline": True},
-                {"name": "Hostname", "value": data.get('hostname', 'N/A'), "inline": True},
-                {"name": "Username", "value": data.get('username', 'N/A'), "inline": True},
-                {"name": "OS", "value": data.get('os_version', 'N/A'), "inline": False},
-                {"name": "CPU", "value": data.get('cpu', 'N/A'), "inline": False},
-                {"name": "GPU", "value": data.get('gpu', 'N/A'), "inline": True},
-                {"name": "RAM", "value": data.get('ram', 'N/A'), "inline": True},
-                {"name": "MAC Address", "value": data.get('mac_address', 'N/A'), "inline": True},
-                {"name": "Public IP", "value": data.get('public_ip', 'N/A'), "inline": True},
-                {"name": "GPU Driver", "value": data.get('gpu_driver', 'N/A'), "inline": True},
-            ],
-            "footer": {"text": f"Check ID: {data.get('check_id', 'N/A')} | Use buttons to Approve/Reject"},
-            "timestamp": data.get('timestamp', datetime.now().isoformat())
-        }
-
-        if data.get('suspicious_processes'):
-            embed["fields"].append({
-                "name": "WARNING - Suspicious Processes",
-                "value": ", ".join(data['suspicious_processes'][:5]),
-                "inline": False
-            })
-            embed["color"] = 16724787
-
-        if data.get('is_vm'):
-            embed["fields"].append({
-                "name": "WARNING - Virtual Machine",
-                "value": f"VM detected: {data.get('vm_indicator', 'Unknown type')}",
-                "inline": False
-            })
-            embed["color"] = 16750848
-
-        payload = json.dumps({"embeds": [embed]}).encode('utf-8')
+        payload = json.dumps(data).encode('utf-8')
 
         req = Request(
-            webhook_url,
+            BOT_URL,
             data=payload,
             headers={"Content-Type": "application/json", "User-Agent": "PCCheck/1.0"}
         )
@@ -210,7 +174,7 @@ def main():
     print("=" * 45)
     print()
 
-    # Parse arguments: CHECK_ID USER_ID WEBHOOK_URL
+    # Parse arguments: CHECK_ID USER_ID
     args = sys.argv
     if len(args) > 1:
         CHECK_ID = args[1]
@@ -220,21 +184,11 @@ def main():
         USER_ID = args[2]
     else:
         USER_ID = ""
-    if len(args) > 3:
-        WEBHOOK_URL = args[3]
-    else:
-        WEBHOOK_URL = ""
 
     if len(args) < 3 or not CHECK_ID or not USER_ID:
-        print("Usage: PCCheck.exe <CHECK_ID> <USER_ID> [WEBHOOK_URL]")
+        print("Usage: PCCheck.exe <CHECK_ID> <USER_ID>")
         print()
         print("This tool should be launched automatically.")
-        input("\nPress Enter to exit...")
-        sys.exit(1)
-
-    if not WEBHOOK_URL or WEBHOOK_URL == "YOUR_BOT_URL":
-        print("ERROR: Bot URL not configured!")
-        print("Please contact staff for the correct tool.")
         input("\nPress Enter to exit...")
         sys.exit(1)
 
@@ -286,8 +240,8 @@ def main():
     print("-" * 45)
     print("Sending verification to Discord...")
 
-    # Send to Discord
-    success, message = send_to_discord(data, WEBHOOK_URL)
+    # Send to bot
+    success, message = send_to_bot(data)
 
     print()
     if success:
