@@ -500,117 +500,143 @@ class PCCheckActionView(discord.ui.View):
         super().__init__(timeout=None)
         self.check_id = check_id
 
-    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id="pccheck_approve")
-    async def approve(self, interaction, button):
+        # Create buttons with check_id in custom_id
+        approve_btn = discord.ui.Button(
+            label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI,
+            custom_id=f"pccheck_approve_{check_id}"
+        )
+        approve_btn.callback = self.approve_callback
+
+        reject_btn = discord.ui.Button(
+            label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI,
+            custom_id=f"pccheck_reject_{check_id}"
+        )
+        reject_btn.callback = self.reject_callback
+
+        moreinfo_btn = discord.ui.Button(
+            label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI,
+            custom_id=f"pccheck_moreinfo_{check_id}"
+        )
+        moreinfo_btn.callback = self.moreinfo_callback
+
+        self.add_item(approve_btn)
+        self.add_item(reject_btn)
+        self.add_item(moreinfo_btn)
+
+    async def approve_callback(self, interaction):
         await handle_check_action(interaction, self.check_id, "APPROVED")
 
-    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id="pccheck_reject")
-    async def reject(self, interaction, button):
+    async def reject_callback(self, interaction):
         await handle_check_action(interaction, self.check_id, "REJECTED")
 
-    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id="pccheck_moreinfo")
-    async def more_info(self, interaction, button):
+    async def moreinfo_callback(self, interaction):
         await handle_check_action(interaction, self.check_id, "NEEDS_INFO")
 
 async def handle_check_action(interaction, check_id: str, new_status: str):
     """Handle approve/reject/moreinfo button clicks."""
-    print(f"Button clicked with check_id: {check_id}, action: {new_status}")
-
-    config = get_guild_config(interaction.guild.id)
-
-    # Check permissions - require staff role
-    user = interaction.user
-    staff_role_id = config.get("staff_role_id", 0)
-
-    has_permission = False
-    if staff_role_id and any(role.id == staff_role_id for role in user.roles):
-        has_permission = True
-
-    if not has_permission:
-        await interaction.response.send_message(
-            "❌ You don't have permission to review PC checks.",
-            ephemeral=True
-        )
-        return
-
-    # Load check data from database
-    check_data = get_check(check_id)
-    print(f"Check data from DB: {check_data}")
-
-    if not check_data:
-        await interaction.response.send_message(
-            "❌ Check not found. It may have already been processed.",
-            ephemeral=True
-        )
-        return
-
-    # Update status in database
-    update_check(check_id, {
-        "status": new_status,
-        "processed_by": str(interaction.user.id),
-        "processed_at": datetime.now().isoformat(),
-    })
-
-    # Update user's roles if configured
-    user_id = check_data.get("user_id")
-    member = interaction.guild.get_member(int(user_id)) if user_id else None
-    if member:
-        try:
-            approved_role_id = config.get("approved_role_id", 0)
-            rejected_role_id = config.get("rejected_role_id", 0)
-            pending_role_id = config.get("pending_role_id", 0)
-
-            # Remove pending role
-            if pending_role_id:
-                pending_role = interaction.guild.get_role(pending_role_id)
-                if pending_role and pending_role in member.roles:
-                    await member.remove_roles(pending_role)
-
-            # Handle new status
-            if new_status == "APPROVED" and approved_role_id:
-                approved_role = interaction.guild.get_role(approved_role_id)
-                if approved_role:
-                    await member.add_roles(approved_role)
-                    # Remove rejected if they had it
-                    if rejected_role_id:
-                        rejected_role = interaction.guild.get_role(rejected_role_id)
-                        if rejected_role and rejected_role in member.roles:
-                            await member.remove_roles(rejected_role)
-
-            elif new_status == "REJECTED" and rejected_role_id:
-                rejected_role = interaction.guild.get_role(rejected_role_id)
-                if rejected_role:
-                    await member.add_roles(rejected_role)
-                    # Remove approved if they had it
-                    if approved_role_id:
-                        approved_role = interaction.guild.get_role(approved_role_id)
-                        if approved_role and approved_role in member.roles:
-                            await member.remove_roles(approved_role)
-        except Exception as e:
-            print(f"Error updating roles: {e}")
-
-    # Update the message
-    check_data["status"] = new_status
-    embed = create_pc_check_embed(check_data)
-
-    # Update view based on status
-    view = None
-    if new_status in ["APPROVED", "REJECTED"]:
-        view = None  # Hide buttons
-    else:
-        view = PCCheckActionView(check_id)
+    config = None
+    check_data = None
 
     try:
-        await interaction.message.edit(embed=embed, view=view)
-    except:
-        pass
+        config = get_guild_config(interaction.guild.id)
 
-    # Confirmation message
-    status_emoji = {"APPROVED": "✅", "REJECTED": "❌", "NEEDS_INFO": "🔍"}
-    await interaction.response.send_message(
-        f"{status_emoji.get(new_status, '⚠️')} Check {new_status.replace('_', ' ')}!",
-        ephemeral=True
-    )
+        # Check permissions - require staff role
+        user = interaction.user
+        staff_role_id = config.get("staff_role_id", 0)
+
+        has_permission = False
+        if staff_role_id and any(role.id == staff_role_id for role in user.roles):
+            has_permission = True
+
+        if not has_permission:
+            await interaction.response.send_message(
+                "❌ You don't have permission to review PC checks.",
+                ephemeral=True
+            )
+            return
+
+        # Load check data from database
+        check_data = get_check(check_id)
+
+        if not check_data:
+            await interaction.response.send_message(
+                "❌ Check not found. It may have already been processed.",
+                ephemeral=True
+            )
+            return
+
+        # Update status in database
+        update_check(check_id, {
+            "status": new_status,
+            "processed_by": str(interaction.user.id),
+            "processed_at": datetime.now().isoformat(),
+        })
+
+        # Update user's roles if configured
+        user_id = check_data.get("user_id")
+        member = interaction.guild.get_member(int(user_id)) if user_id else None
+        if member:
+            try:
+                approved_role_id = config.get("approved_role_id", 0)
+                rejected_role_id = config.get("rejected_role_id", 0)
+                pending_role_id = config.get("pending_role_id", 0)
+
+                # Remove pending role
+                if pending_role_id:
+                    pending_role = interaction.guild.get_role(pending_role_id)
+                    if pending_role and pending_role in member.roles:
+                        await member.remove_roles(pending_role)
+
+                # Handle new status
+                if new_status == "APPROVED" and approved_role_id:
+                    approved_role = interaction.guild.get_role(approved_role_id)
+                    if approved_role:
+                        await member.add_roles(approved_role)
+                        if rejected_role_id:
+                            rejected_role = interaction.guild.get_role(rejected_role_id)
+                            if rejected_role and rejected_role in member.roles:
+                                await member.remove_roles(rejected_role)
+
+                elif new_status == "REJECTED" and rejected_role_id:
+                    rejected_role = interaction.guild.get_role(rejected_role_id)
+                    if rejected_role:
+                        await member.add_roles(rejected_role)
+                        if approved_role_id:
+                            approved_role = interaction.guild.get_role(approved_role_id)
+                            if approved_role and approved_role in member.roles:
+                                await member.remove_roles(approved_role)
+            except Exception as e:
+                print(f"Error updating roles: {e}")
+
+        # Update the message
+        check_data["status"] = new_status
+        embed = create_pc_check_embed(check_data)
+
+        # Update view based on status
+        view = None
+        if new_status in ["APPROVED", "REJECTED"]:
+            view = None
+        else:
+            view = PCCheckActionView(check_id)
+
+        try:
+            await interaction.message.edit(embed=embed, view=view)
+        except Exception as e:
+            print(f"Error editing message: {e}")
+
+        # Confirmation message
+        status_emoji = {"APPROVED": "✅", "REJECTED": "❌", "NEEDS_INFO": "🔍"}
+        await interaction.response.send_message(
+            f"{status_emoji.get(new_status, '⚠️')} Check {new_status.replace('_', ' ')}!",
+            ephemeral=True
+        )
+
+    except Exception as e:
+        print(f"Error in handle_check_action: {e}")
+        try:
+            await interaction.response.send_message("An error occurred.", ephemeral=True)
+        except:
+            pass
 
     # Send to log channel
     log_channel_id = config.get("log_channel_id", 0)
@@ -816,6 +842,8 @@ class PCBOT(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
+        # Register the check action view as persistent
+        self.add_view(PCCheckActionView("placeholder"), message_id=None)
 
 bot = PCBOT()
 
