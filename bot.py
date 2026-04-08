@@ -824,15 +824,40 @@ class PCBOT(commands.Bot):
     async def setup_hook(self):
         await self.tree.sync()
 
-    async def on_interaction(self, interaction):
-        print(f"Received interaction: {interaction.data}")
-        await self.process_interaction(interaction)
-
-    async def process_interaction(self, interaction):
-        # Let Discord handle button callbacks
-        pass
-
 bot = PCBOT()
+
+# Persistent view that handles all button clicks
+class PersistentCheckView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id="pccheck_approve")
+    async def approve(self, interaction, button):
+        # Extract check_id from the message footer
+        footer = interaction.message.embeds[0].footer.text if interaction.message.embeds else ""
+        check_id = footer.replace("Check ID: ", "").strip() if footer else None
+        if check_id:
+            await handle_check_action(interaction, check_id, "APPROVED")
+        else:
+            await interaction.response.send_message("Error: Check ID not found", ephemeral=True)
+
+    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id="pccheck_reject")
+    async def reject(self, interaction, button):
+        footer = interaction.message.embeds[0].footer.text if interaction.message.embeds else ""
+        check_id = footer.replace("Check ID: ", "").strip() if footer else None
+        if check_id:
+            await handle_check_action(interaction, check_id, "REJECTED")
+        else:
+            await interaction.response.send_message("Error: Check ID not found", ephemeral=True)
+
+    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id="pccheck_moreinfo")
+    async def more_info(self, interaction, button):
+        footer = interaction.message.embeds[0].footer.text if interaction.message.embeds else ""
+        check_id = footer.replace("Check ID: ", "").strip() if footer else None
+        if check_id:
+            await handle_check_action(interaction, check_id, "NEEDS_INFO")
+        else:
+            await interaction.response.send_message("Error: Check ID not found", ephemeral=True)
 
 # ============================================================
 # SLASH COMMANDS
@@ -1226,7 +1251,7 @@ def webhookReceiver():
             pc_channel = bot.get_channel(pc_channel_id)
             print(f"Channel object: {pc_channel}")
             if pc_channel:
-                view = create_check_action_view(check_id)
+                view = PersistentCheckView()
                 staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
                 asyncio.run_coroutine_threadsafe(
                     pc_channel.send(content=f"{staff_mention}<@{user_id}> PC check received!", embed=embed, view=view),
