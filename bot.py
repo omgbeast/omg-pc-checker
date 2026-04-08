@@ -894,7 +894,14 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
             "created_at": datetime.now().isoformat(),
         })
 
-    # Send DM to user asking for agreement
+    # Confirm immediately to avoid interaction timeout
+    confirm_msg = f"✅ PC check request sent!"
+    confirm_msg += f"\n• DM sent to {user.mention}"
+    confirm_msg += f"\n• Check ID: `{check_id}`"
+
+    await interaction.response.send_message(confirm_msg, ephemeral=True)
+
+    # Send DM to user asking for agreement (after response)
     try:
         dm_embed = discord.Embed(
             title="🔍 PC Verification Required",
@@ -918,9 +925,8 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
         dm_embed.set_footer(text="If you have issues, contact staff.")
 
         await user.send(embed=dm_embed)
-        dm_sent = True
-    except discord.Forbidden:
-        dm_sent = False
+    except:
+        pass
 
     # Post check request in channel (without download link, for staff)
     pc_channel_id = config.get("pc_check_channel_id", 0)
@@ -929,8 +935,10 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
         if pc_channel:
             embed = create_pc_check_embed(check_data)
             view = PCCheckActionView(check_id)
+            staff_role_id = config.get("staff_role_id", 0)
+            staff_mention = f"<@&{staff_role_id}> " if staff_role_id else ""
             await pc_channel.send(
-                content=f"PC check requested for {user.mention} (`{check_id}`)",
+                content=f"{staff_mention}{user.mention} PC check requested (`{check_id}`)",
                 embed=embed,
                 view=view
             )
@@ -946,17 +954,6 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
                     await member.add_roles(pending_role)
             except:
                 pass
-
-    # Confirmation message
-    confirm_msg = f"✅ PC check request sent!"
-    if dm_sent:
-        confirm_msg += f"\n• DM sent to {user.mention}"
-    else:
-        confirm_msg += f"\n• ⚠️ Could not DM {user.mention} (DMs disabled)"
-
-    confirm_msg += f"\n• Check ID: `{check_id}`"
-
-    await interaction.response.send_message(confirm_msg, ephemeral=True)
 
 
 @bot.tree.command(name="check_status", description="Check your PC verification status")
