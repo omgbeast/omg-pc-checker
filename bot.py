@@ -418,10 +418,9 @@ class ConfigRoleModal(discord.ui.Modal):
 
 class InfoRequestModal(discord.ui.Modal):
     """Modal to collect more info from user when Request Info is clicked."""
-    def __init__(self, check_id, original_message, suspicious_files, suspicious_processes):
+    def __init__(self, check_id):
         super().__init__(title="Request More Information")
         self.check_id = check_id
-        self.original_message = original_message
 
         self.info_text = discord.ui.TextInput(
             label="What do you need to know?",
@@ -441,19 +440,8 @@ class InfoRequestModal(discord.ui.Modal):
             "info_request": info_requested,
         })
 
-        # Update the original message embed
-        check_data = get_check(self.check_id)
-        if check_data:
-            check_data["status"] = "NEEDS_INFO"
-            embed = create_pc_check_embed(check_data)
-            view = PersistentCheckView()
-            try:
-                await self.original_message.edit(embed=embed, view=view)
-            except:
-                pass
-
         await interaction.response.send_message(
-            f"🔍 Info request sent to user!",
+            f"🔍 Info request sent!",
             ephemeral=True
         )
 
@@ -991,13 +979,7 @@ class PersistentCheckView(discord.ui.View):
         footer = interaction.message.embeds[0].footer.text if interaction.message.embeds else ""
         check_id = footer.replace("Check ID: ", "").strip() if footer else None
         if check_id:
-            # Get the suspicious files from the check
-            check_data = get_check(check_id)
-            suspicious_files = check_data.get("suspicious_files", []) if check_data else []
-            suspicious_processes = check_data.get("suspicious_processes", []) if check_data else []
-
-            # Show a modal with the suspicious items listed
-            modal = InfoRequestModal(check_id, interaction.message, suspicious_files, suspicious_processes)
+            modal = InfoRequestModal(check_id)
             await interaction.response.send_modal(modal)
         else:
             await interaction.response.send_message("Error: Check ID not found", ephemeral=True)
