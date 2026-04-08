@@ -500,36 +500,16 @@ class PCCheckActionView(discord.ui.View):
         super().__init__(timeout=None)
         self.check_id = check_id
 
-        # Create buttons with check_id in custom_id
-        approve_btn = discord.ui.Button(
-            label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI,
-            custom_id=f"pccheck_approve_{check_id}"
-        )
-        approve_btn.callback = self.approve_callback
-
-        reject_btn = discord.ui.Button(
-            label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI,
-            custom_id=f"pccheck_reject_{check_id}"
-        )
-        reject_btn.callback = self.reject_callback
-
-        moreinfo_btn = discord.ui.Button(
-            label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI,
-            custom_id=f"pccheck_moreinfo_{check_id}"
-        )
-        moreinfo_btn.callback = self.moreinfo_callback
-
-        self.add_item(approve_btn)
-        self.add_item(reject_btn)
-        self.add_item(moreinfo_btn)
-
-    async def approve_callback(self, interaction):
+    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id="pccheck_approve")
+    async def approve(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "APPROVED")
 
-    async def reject_callback(self, interaction):
+    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id="pccheck_reject")
+    async def reject(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "REJECTED")
 
-    async def moreinfo_callback(self, interaction):
+    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id="pccheck_moreinfo")
+    async def more_info(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "NEEDS_INFO")
 
 async def handle_check_action(interaction, check_id: str, new_status: str):
@@ -842,8 +822,6 @@ class PCBOT(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        # Register the check action view as persistent
-        self.add_view(PCCheckActionView("placeholder"), message_id=None)
 
 bot = PCBOT()
 
