@@ -37,7 +37,7 @@ def get_default_guild_config():
 
 def get_guild_config(guild_id: str) -> dict:
     """Get guild config from database, create default if not exists."""
-    if not guilds_collection:
+    if guilds_collection is None:
         return get_default_guild_config()
 
     guild_id_str = str(guild_id)
@@ -59,7 +59,7 @@ def get_guild_config(guild_id: str) -> dict:
 
 def update_guild_config(guild_id: str, config_updates: dict):
     """Update guild config in database."""
-    if not guilds_collection:
+    if guilds_collection is None:
         return
 
     guild_id_str = str(guild_id)
@@ -76,7 +76,7 @@ def update_guild_config(guild_id: str, config_updates: dict):
 
 def create_check(check_data: dict) -> dict:
     """Create a new pending check in database."""
-    if not checks_collection:
+    if checks_collection is None:
         return check_data
 
     checks_collection.insert_one(check_data)
@@ -84,14 +84,14 @@ def create_check(check_data: dict) -> dict:
 
 def get_check(check_id: str) -> dict:
     """Get a check by check_id."""
-    if not checks_collection:
+    if checks_collection is None:
         return None
 
     return checks_collection.find_one({"_id": check_id})
 
 def update_check(check_id: str, updates: dict):
     """Update a check in database."""
-    if not checks_collection:
+    if checks_collection is None:
         return
 
     checks_collection.update_one(
@@ -101,7 +101,7 @@ def update_check(check_id: str, updates: dict):
 
 def get_user_checks(guild_id: str, user_id: str) -> list:
     """Get all checks for a user in a guild."""
-    if not checks_collection:
+    if checks_collection is None:
         return []
 
     cursor = checks_collection.find({
