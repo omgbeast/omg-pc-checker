@@ -30,6 +30,7 @@ def save_config(config):
 def get_default_config():
     return {
         "webhook_url": "",
+        "download_url": "",
         "pc_check_channel_id": 0,
         "log_channel_id": 0,
         "staff_role_id": 0,
@@ -86,20 +87,33 @@ class ConfigView(discord.ui.View):
     async def cfg_webhook(self, interaction, button):
         await interaction.response.send_modal(ConfigModal(self.bot, "webhook_url", "Webhook URL", "Enter Discord webhook URL", False))
 
+    @discord.ui.button(label="Download URL", style=discord.ButtonStyle.secondary, emoji="📥", custom_id="cfg_download")
+    async def cfg_download(self, interaction, button):
+        await interaction.response.send_modal(ConfigModal(self.bot, "download_url", "Download URL", "Enter EXE download URL", False))
+
     @discord.ui.button(label="PC Check Channel", style=discord.ButtonStyle.secondary, emoji="📁", custom_id="cfg_pc_channel")
     async def cfg_pc_channel(self, interaction, button):
-        modal = ConfigChannelModal(self.bot, "pc_check_channel_id", "PC Check Channel")
-        await interaction.response.send_modal(modal)
+        await interaction.response.send_message(
+            "Select PC Check Channel:",
+            view=ChannelSelectView(self.bot, "pc_check_channel_id"),
+            ephemeral=True
+        )
 
     @discord.ui.button(label="Log Channel", style=discord.ButtonStyle.secondary, emoji="📝", custom_id="cfg_log_channel")
     async def cfg_log_channel(self, interaction, button):
-        modal = ConfigChannelModal(self.bot, "log_channel_id", "Log Channel")
-        await interaction.response.send_modal(modal)
+        await interaction.response.send_message(
+            "Select Log Channel:",
+            view=ChannelSelectView(self.bot, "log_channel_id"),
+            ephemeral=True
+        )
 
     @discord.ui.button(label="Staff Role", style=discord.ButtonStyle.secondary, emoji="👮", custom_id="cfg_staff_role")
     async def cfg_staff_role(self, interaction, button):
-        modal = ConfigRoleModal(self.bot, "staff_role_id", "Staff Role")
-        await interaction.response.send_modal(modal)
+        await interaction.response.send_message(
+            "Select Staff Role:",
+            view=RoleSelectView(self.bot, "staff_role_id"),
+            ephemeral=True
+        )
 
 class ConfigModal(discord.ui.Modal):
     def __init__(self, bot, key, title, placeholder, is_password=False, is_list=False):
@@ -122,25 +136,93 @@ class ConfigModal(discord.ui.Modal):
         config = load_config()
 
         if self.is_list:
-            # Parse comma-separated list
             value = [v.strip().lower() for v in self.input.value.split(",") if v.strip()]
             config[self.key] = value
             display_value = ", ".join(value)
         else:
             value = self.input.value.strip()
-            if self.key in ["pc_check_channel_id", "log_channel_id", "staff_role_id", "approved_role_id", "rejected_role_id", "pending_role_id"]:
-                # Try to extract ID from mention or use as number
+            if self.key in ["pc_check_channel_id", "log_channel_id", "staff_role_id"]:
                 match = re.match(r'<#(\d+)>', value) or re.match(r'<@&(\d+)>', value) or re.match(r'<@(\d+)>', value)
                 if match:
                     value = int(match.group(1))
                 else:
                     value = int(value) if value.isdigit() else 0
             config[self.key] = value
-            display_value = "•" * len(value) if self.key == "bot_token" else value
+            display_value = value
 
         save_config(config)
         await interaction.response.send_message(
-            f"✅ Updated `{self.key}` to: `{display_value}`",
+            f"✅ Updated `{self.key}`",
+            ephemeral=True
+        )
+
+
+class ChannelSelectView(discord.ui.View):
+    def __init__(self, bot, config_key):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.config_key = config_key
+
+        # Get text channels
+        if interaction.guild:
+            channels = interaction.guild.text_channels
+        else:
+            channels = []
+
+        options = [
+            discord.SelectOption(label=c.name, value=str(c.id))
+            for c in channels[:25]
+        ]
+
+        if options:
+            select = discord.ui.Select(placeholder="Select a channel...", options=options)
+            select.callback = self.on_select
+            self.add_item(select)
+
+    async def on_select(self, interaction):
+        config = load_config()
+        channel_id = int(interaction.values[0])
+        config[self.config_key] = channel_id
+        save_config(config)
+
+        channel = self.bot.get_channel(channel_id)
+        await interaction.response.send_message(
+            f"✅ Set to #{channel.name}" if channel else f"✅ Set to ID: {channel_id}",
+            ephemeral=True
+        )
+
+
+class RoleSelectView(discord.ui.View):
+    def __init__(self, bot, config_key):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.config_key = config_key
+
+        # Get roles (excluding @everyone)
+        if interaction.guild:
+            roles = [r for r in interaction.guild.roles if r.name != "@everyone"]
+        else:
+            roles = []
+
+        options = [
+            discord.SelectOption(label=r.name, value=str(r.id))
+            for r in roles[:25]
+        ]
+
+        if options:
+            select = discord.ui.Select(placeholder="Select a role...", options=options)
+            select.callback = self.on_select
+            self.add_item(select)
+
+    async def on_select(self, interaction):
+        config = load_config()
+        role_id = int(interaction.values[0])
+        config[self.config_key] = role_id
+        save_config(config)
+
+        role = interaction.guild.get_role(role_id)
+        await interaction.response.send_message(
+            f"✅ Set to @{role.name}" if role else f"✅ Set to ID: {role_id}",
             ephemeral=True
         )
 
@@ -233,9 +315,10 @@ class ConfigStatusView(discord.ui.View):
             color=discord.Color.blue()
         )
 
+        webhook = config.get("webhook_url", "")
         embed.add_field(
             name="🔗 Webhook URL",
-            value=f"`{webhook_display}`" if webhook else "❌ Not Set",
+            value=f"`{webhook[:30]}...`" if webhook else "❌ Not Set",
             inline=True
         )
 
@@ -257,53 +340,10 @@ class ConfigStatusView(discord.ui.View):
 
         # Roles
         staff_role = interaction.guild.get_role(config.get("staff_role_id", 0))
-        approved_role = interaction.guild.get_role(config.get("approved_role_id", 0))
-        rejected_role = interaction.guild.get_role(config.get("rejected_role_id", 0))
-        pending_role = interaction.guild.get_role(config.get("pending_role_id", 0))
 
         embed.add_field(
             name="👮 Staff Role",
             value=f"{staff_role.mention}" if staff_role else "❌ Not Set",
-            inline=True
-        )
-
-        embed.add_field(
-            name="✅ Approved Role",
-            value=f"{approved_role.mention}" if approved_role else "❌ Not Set",
-            inline=True
-        )
-
-        embed.add_field(
-            name="❌ Rejected Role",
-            value=f"{rejected_role.mention}" if rejected_role else "❌ Not Set",
-            inline=True
-        )
-
-        embed.add_field(
-            name="⏳ Pending Role",
-            value=f"{pending_role.mention}" if pending_role else "❌ Not Set",
-            inline=True
-        )
-
-        # Download URL
-        download_url = config.get("download_url", "")
-        embed.add_field(
-            name="📥 Download URL",
-            value=f"[Click here]({download_url})" if download_url else "❌ Not Set",
-            inline=False
-        )
-
-        # Flag Keywords
-        keywords = config.get("auto_flag_keywords", [])
-        embed.add_field(
-            name="🚩 Flag Keywords",
-            value=", ".join(keywords) if keywords else "❌ Not Set",
-            inline=False
-        )
-
-        embed.add_field(
-            name="🔧 VM Check",
-            value="✅ Enabled" if config.get("vm_check_enabled", True) else "❌ Disabled",
             inline=True
         )
 

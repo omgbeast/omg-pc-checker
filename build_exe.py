@@ -35,7 +35,6 @@ def main():
         "--onefile",           # Single EXE file
         "--noconsole",         # No console window (hide CMD)
         "--name", "PCCheck",
-        "--add-data", "webhook_url.txt;.",  # Include URL file
         "pc_check_exe.py"
     ]
 
