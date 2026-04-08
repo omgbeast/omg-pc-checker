@@ -499,17 +499,21 @@ class PCCheckActionView(discord.ui.View):
     def __init__(self, check_id: str):
         super().__init__(timeout=None)
         self.check_id = check_id
+        print(f"Created PCCheckActionView with check_id: {check_id}")
 
     @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id="pccheck_approve")
     async def approve(self, interaction, button):
+        print(f"Approve button clicked, check_id: {self.check_id}")
         await handle_check_action(interaction, self.check_id, "APPROVED")
 
     @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id="pccheck_reject")
     async def reject(self, interaction, button):
+        print(f"Reject button clicked, check_id: {self.check_id}")
         await handle_check_action(interaction, self.check_id, "REJECTED")
 
     @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id="pccheck_moreinfo")
     async def more_info(self, interaction, button):
+        print(f"MoreInfo button clicked, check_id: {self.check_id}")
         await handle_check_action(interaction, self.check_id, "NEEDS_INFO")
 
 async def handle_check_action(interaction, check_id: str, new_status: str):
