@@ -938,12 +938,9 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
 
     # Store pending agreement
     if pending_agreements is not None:
-        # Remove any existing pending agreement for this user
-        pending_agreements.delete_one({"_id": str(user.id)})
-
-        # Check if user has existing check and remove their old roles
-        existing_checks = checks_collection.find({"user_id": str(user.id)})
-        for old_check in existing_checks:
+        # Check if user has existing check and remove their old roles first
+        user_checks = checks_collection.find({"user_id": str(user.id)})
+        for old_check in user_checks:
             if old_check.get("status") == "APPROVED":
                 approved_role_id = config.get("approved_role_id", 0)
                 if approved_role_id:
@@ -967,12 +964,16 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
                         except:
                             pass
 
-        pending_agreements.insert_one({
-            "_id": str(user.id),
-            "check_id": check_id,
-            "guild_id": str(interaction.guild.id),
-            "created_at": datetime.now().isoformat(),
-        })
+        # Upsert pending agreement
+        pending_agreements.update_one(
+            {"_id": str(user.id)},
+            {"$set": {
+                "check_id": check_id,
+                "guild_id": str(interaction.guild.id),
+                "created_at": datetime.now().isoformat(),
+            }},
+            upsert=True
+        )
 
     # Confirm immediately to avoid interaction timeout
     confirm_msg = f"✅ PC check request sent!"
