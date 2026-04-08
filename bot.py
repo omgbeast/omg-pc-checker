@@ -500,20 +500,21 @@ class PCCheckActionView(discord.ui.View):
         super().__init__(timeout=None)
         self.check_id = check_id
 
-    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id=f"pccheck_approve_{check_id}")
+    @discord.ui.button(label="Approve", style=discord.ButtonStyle.success, emoji=APPROVE_EMOJI, custom_id="pccheck_approve")
     async def approve(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "APPROVED")
 
-    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id=f"pccheck_reject_{check_id}")
+    @discord.ui.button(label="Reject", style=discord.ButtonStyle.danger, emoji=REJECT_EMOJI, custom_id="pccheck_reject")
     async def reject(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "REJECTED")
 
-    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id=f"pccheck_moreinfo_{check_id}")
+    @discord.ui.button(label="Request Info", style=discord.ButtonStyle.secondary, emoji=MORE_INFO_EMOJI, custom_id="pccheck_moreinfo")
     async def more_info(self, interaction, button):
         await handle_check_action(interaction, self.check_id, "NEEDS_INFO")
 
 async def handle_check_action(interaction, check_id: str, new_status: str):
     """Handle approve/reject/moreinfo button clicks."""
+    print(f"Button clicked with check_id: {check_id}, action: {new_status}")
 
     config = get_guild_config(interaction.guild.id)
 
@@ -534,6 +535,7 @@ async def handle_check_action(interaction, check_id: str, new_status: str):
 
     # Load check data from database
     check_data = get_check(check_id)
+    print(f"Check data from DB: {check_data}")
 
     if not check_data:
         await interaction.response.send_message(
