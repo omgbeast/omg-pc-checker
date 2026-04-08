@@ -418,23 +418,22 @@ class ConfigRoleModal(discord.ui.Modal):
 
 class InfoRequestModal(discord.ui.Modal):
     """Modal to collect more info from user when Request Info is clicked."""
-    def __init__(self, check_id, original_message, suspicious_files):
+    def __init__(self, check_id, original_message, suspicious_files, suspicious_processes):
         super().__init__(title="Request More Information")
         self.check_id = check_id
         self.original_message = original_message
-        self.suspicious_files = suspicious_files
 
-        self.info_select = discord.ui.TextInput(
-            label="Select or describe the issue",
-            placeholder="Select from dropdown OR type custom message...",
+        self.info_text = discord.ui.TextInput(
+            label="What do you need to know?",
+            placeholder="Type your question to the user...",
             required=True,
             style=discord.TextStyle.long,
             max_length=500
         )
-        self.add_item(self.info_select)
+        self.add_item(self.info_text)
 
     async def callback(self, interaction):
-        info_requested = self.info_select.value.strip()
+        info_requested = self.info_text.value.strip()
 
         # Update the check as NEEDS_INFO with the request message
         update_check(self.check_id, {
@@ -995,14 +994,11 @@ class PersistentCheckView(discord.ui.View):
             # Get the suspicious files from the check
             check_data = get_check(check_id)
             suspicious_files = check_data.get("suspicious_files", []) if check_data else []
+            suspicious_processes = check_data.get("suspicious_processes", []) if check_data else []
 
-            # Show a select view with suspicious files
-            view = InfoRequestSelect(check_id, interaction.message, suspicious_files)
-            await interaction.response.send_message(
-                "Select the suspicious file you found or choose custom message:",
-                view=view,
-                ephemeral=True
-            )
+            # Show a modal with the suspicious items listed
+            modal = InfoRequestModal(check_id, interaction.message, suspicious_files, suspicious_processes)
+            await interaction.response.send_modal(modal)
         else:
             await interaction.response.send_message("Error: Check ID not found", ephemeral=True)
 
