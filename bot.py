@@ -887,7 +887,7 @@ async def on_ready():
     print(f"{'='*50}")
     print(f"Bot: {bot.user.name}")
     print(f"Channel: {bot.get_channel(config.get('pc_check_channel_id', 0))}")
-    print(f"Commands synced: {len(bot.tree.commands)}")
+    print(f"Commands synced: Yes")
     print(f"\nConfiguration file: {CONFIG_FILE}")
 
     if not config.get("bot_token"):
