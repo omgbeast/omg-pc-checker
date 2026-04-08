@@ -26,6 +26,11 @@ def main():
         shutil.rmtree("dist")
     if os.path.exists("build"):
         shutil.rmtree("build")
+    if os.path.exists("__pycache__"):
+        shutil.rmtree("__pycache__")
+    # Also clean PyInstaller cache
+    if os.path.exists("PCCheck.spec"):
+        os.remove("PCCheck.spec")
 
     print("\nBuilding EXE (this may take a minute)...\n")
 
@@ -33,7 +38,6 @@ def main():
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--onefile",           # Single EXE file
-        "--noconsole",         # No console window (hide CMD)
         "--name", "PCCheck",
         "pc_check_exe.py"
     ]

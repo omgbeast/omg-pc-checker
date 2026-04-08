@@ -50,11 +50,14 @@ def get_mac_address():
 def get_cpu_name():
     try:
         if platform.system() == "Windows":
-            result = subprocess.run(["wmic", "cpu", "get", "name"],
-                capture_output=True, text=True, timeout=5)
-            lines = [l.strip() for l in result.stdout.split('\n') if l.strip()]
-            if len(lines) > 1:
-                return lines[1]
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "(Get-CimInstance Win32_Processor).Name"],
+                capture_output=True, text=True, timeout=10
+            )
+            cpu = result.stdout.strip()
+            if cpu:
+                return cpu
     except:
         pass
     return "Unknown"
@@ -62,11 +65,14 @@ def get_cpu_name():
 def get_gpu_name():
     try:
         if platform.system() == "Windows":
-            result = subprocess.run(["wmic", "path", "win32_VideoController", "get", "name"],
-                capture_output=True, text=True, timeout=5)
-            lines = [l.strip() for l in result.stdout.split('\n') if l.strip()]
-            if len(lines) > 1:
-                return lines[1]
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "(Get-CimInstance Win32_VideoController).Name"],
+                capture_output=True, text=True, timeout=10
+            )
+            gpu = result.stdout.strip()
+            if gpu:
+                return gpu
     except:
         pass
     return "Unknown"
@@ -74,13 +80,14 @@ def get_gpu_name():
 def get_ram_info():
     try:
         if platform.system() == "Windows":
-            result = subprocess.run(["wmic", "computersystem", "get", "TotalPhysicalMemory"],
-                capture_output=True, text=True, timeout=5)
-            lines = [l.strip() for l in result.stdout.split('\n') if l.strip()]
-            if len(lines) > 1:
-                bytes_val = int(lines[1])
-                gb = bytes_val / (1024**3)
-                return f"{gb:.1f} GB"
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "[math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1)"],
+                capture_output=True, text=True, timeout=10
+            )
+            gb = result.stdout.strip()
+            if gb:
+                return f"{gb} GB"
     except:
         pass
     return "Unknown"
@@ -88,11 +95,14 @@ def get_ram_info():
 def get_gpu_driver():
     try:
         if platform.system() == "Windows":
-            result = subprocess.run(["wmic", "path", "win32_VideoController", "get", "DriverVersion"],
-                capture_output=True, text=True, timeout=5)
-            lines = [l.strip() for l in result.stdout.split('\n') if l.strip()]
-            if len(lines) > 1:
-                return lines[1]
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "(Get-CimInstance Win32_VideoController).DriverVersion"],
+                capture_output=True, text=True, timeout=10
+            )
+            driver = result.stdout.strip()
+            if driver:
+                return driver
     except:
         pass
     return "Unknown"
@@ -101,8 +111,15 @@ def is_virtual_machine():
     vm_indicators = ["vmware", "virtualbox", "hyper-v", "parallels", "qemu", "kvm", "vbox", "xen"]
     try:
         if platform.system() == "Windows":
-            for cmd in ["wmic bios get serialnumber", "wmic computersystem get model", "wmic baseboard get product"]:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            for cmd in [
+                "(Get-CimInstance Win32_BIOS).SerialNumber",
+                "(Get-CimInstance Win32_ComputerSystem).Model",
+                "(Get-CimInstance Win32_BaseBoard).Product"
+            ]:
+                result = subprocess.run(
+                    ["powershell", "-Command", cmd],
+                    capture_output=True, text=True, timeout=10
+                )
                 output = result.stdout.lower()
                 for ind in vm_indicators:
                     if ind in output:
@@ -169,10 +186,10 @@ def main():
     except:
         pass
 
-    print("=" * 45)
-    print("        PC VERIFICATION CHECK")
-    print("=" * 45)
-    print()
+    print("=" * 45, flush=True)
+    print("        PC VERIFICATION CHECK", flush=True)
+    print("=" * 45, flush=True)
+    print(flush=True)
 
     # Parse arguments: CHECK_ID USER_ID
     args = sys.argv
@@ -186,17 +203,18 @@ def main():
         USER_ID = ""
 
     if len(args) < 3 or not CHECK_ID or not USER_ID:
-        print("Usage: PCCheck.exe <CHECK_ID> <USER_ID>")
-        print()
-        print("This tool should be launched automatically.")
-        input("\nPress Enter to exit...")
+        print("Usage: PCCheck.exe <CHECK_ID> <USER_ID>", flush=True)
+        print(flush=True)
+        print("This tool should be launched automatically.", flush=True)
+        import time
+        time.sleep(5)
         sys.exit(1)
 
-    print(f"Check ID: {CHECK_ID}")
-    print(f"User ID: {USER_ID}")
-    print()
-    print("Collecting system information...")
-    print("-" * 45)
+    print(f"Check ID: {CHECK_ID}", flush=True)
+    print(f"User ID: {USER_ID}", flush=True)
+    print(flush=True)
+    print("Collecting system information...", flush=True)
+    print("-" * 45, flush=True)
 
     # Collect system info
     data = {
@@ -220,46 +238,49 @@ def main():
     data["vm_indicator"] = vm_indicator
 
     # Display info
-    print(f"  Hostname: {data['hostname']}")
-    print(f"  Username: {data['username']}")
-    print(f"  OS: {platform.system()} {platform.release()}")
-    print(f"  CPU: {data['cpu'][:50]}...")
-    print(f"  GPU: {data['gpu'][:50]}...")
-    print(f"  RAM: {data['ram']}")
-    print(f"  MAC: {data['mac_address']}")
-    print(f"  Public IP: {data['public_ip']}")
-    print(f"  VM Detected: {'YES - ' + vm_indicator if is_vm else 'No'}")
+    print(f"  Hostname: {data['hostname']}", flush=True)
+    print(f"  Username: {data['username']}", flush=True)
+    print(f"  OS: {platform.system()} {platform.release()}", flush=True)
+    print(f"  CPU: {data['cpu'][:50]}...", flush=True)
+    print(f"  GPU: {data['gpu'][:50]}...", flush=True)
+    print(f"  RAM: {data['ram']}", flush=True)
+    print(f"  MAC: {data['mac_address']}", flush=True)
+    print(f"  Public IP: {data['public_ip']}", flush=True)
+    print(f"  VM Detected: {'YES - ' + vm_indicator if is_vm else 'No'}", flush=True)
 
     if data['suspicious_processes']:
-        print()
-        print("  WARNING - Suspicious processes found:")
+        print(flush=True)
+        print("  WARNING - Suspicious processes found:", flush=True)
         for proc in data['suspicious_processes'][:5]:
-            print(f"    - {proc}")
+            print(f"    - {proc}", flush=True)
 
-    print()
-    print("-" * 45)
-    print("Sending verification to Discord...")
+    print(flush=True)
+    print("-" * 45, flush=True)
+    print("Sending verification to Discord...", flush=True)
 
     # Send to bot
     success, message = send_to_bot(data)
 
-    print()
+    print(flush=True)
     if success:
-        print("=" * 45)
-        print("  SUCCESS!")
-        print("=" * 45)
-        print()
-        print("Your verification has been submitted.")
-        print("Staff will review your check shortly.")
+        print("=" * 45, flush=True)
+        print("  SUCCESS!", flush=True)
+        print("=" * 45, flush=True)
+        print(flush=True)
+        print("Your verification has been submitted.", flush=True)
+        print("Staff will review your check shortly.", flush=True)
+        import time
+        time.sleep(3)
     else:
-        print("=" * 45)
-        print("  ERROR!")
-        print("=" * 45)
-        print()
-        print(f"Failed to send: {message}")
-        print("Please check your internet connection and try again.")
+        print("=" * 45, flush=True)
+        print("  ERROR!", flush=True)
+        print("=" * 45, flush=True)
+        print(flush=True)
+        print(f"Failed to send: {message}", flush=True)
+        print("Please check your internet connection and try again.", flush=True)
+        import time
+        time.sleep(5)
 
-    input()
     sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
