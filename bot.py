@@ -3,63 +3,141 @@ import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands
-import json
 import uuid
 from datetime import datetime
 import re
 
 # ============================================================
-# DATA STORAGE
+# DATABASE STORAGE (MongoDB)
 # ============================================================
 
-CONFIG_FILE = "bot_config.json"
-CHECK_REQUESTS_FILE = "check_requests.json"
-CHECK_DATA_FILE = "check_data.json"
+from pymongo import MongoClient
 
-def load_config():
-    try:
-        with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return get_default_config()
+mongo_uri = os.environ.get("MONGODB_URI")
+db_client = MongoClient(mongo_uri) if mongo_uri else None
+db = db_client["pc_checker"] if db_client else None
+guilds_collection = db["guilds"] if db else None
+checks_collection = db["checks"] if db else None
 
-def save_config(config):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=2)
+# ============================================================
+# DATA STORAGE FUNCTIONS (MongoDB)
+# ============================================================
 
-def get_default_config():
+def get_default_guild_config():
     return {
         "webhook_url": "",
         "download_url": "",
         "pc_check_channel_id": 0,
         "log_channel_id": 0,
         "staff_role_id": 0,
+        "approved_role_id": 0,
+        "rejected_role_id": 0,
+        "pending_role_id": 0,
     }
 
+def get_guild_config(guild_id: str) -> dict:
+    """Get guild config from database, create default if not exists."""
+    if not guilds_collection:
+        return get_default_guild_config()
+
+    guild_id_str = str(guild_id)
+    guild_doc = guilds_collection.find_one({"_id": guild_id_str})
+
+    if not guild_doc:
+        # Create default config for new guild
+        config = get_default_guild_config()
+        guilds_collection.insert_one({
+            "_id": guild_id_str,
+            "name": "Unknown Server",
+            "config": config,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+        })
+        return config
+
+    return guild_doc.get("config", get_default_guild_config())
+
+def update_guild_config(guild_id: str, config_updates: dict):
+    """Update guild config in database."""
+    if not guilds_collection:
+        return
+
+    guild_id_str = str(guild_id)
+    guilds_collection.update_one(
+        {"_id": guild_id_str},
+        {
+            "$set": {
+                "config": config_updates,
+                "updated_at": datetime.now().isoformat(),
+            }
+        },
+        upsert=True
+    )
+
+def create_check(check_data: dict) -> dict:
+    """Create a new pending check in database."""
+    if not checks_collection:
+        return check_data
+
+    checks_collection.insert_one(check_data)
+    return check_data
+
+def get_check(check_id: str) -> dict:
+    """Get a check by check_id."""
+    if not checks_collection:
+        return None
+
+    return checks_collection.find_one({"_id": check_id})
+
+def update_check(check_id: str, updates: dict):
+    """Update a check in database."""
+    if not checks_collection:
+        return
+
+    checks_collection.update_one(
+        {"_id": check_id},
+        {"$set": updates}
+    )
+
+def get_user_checks(guild_id: str, user_id: str) -> list:
+    """Get all checks for a user in a guild."""
+    if not checks_collection:
+        return []
+
+    cursor = checks_collection.find({
+        "guild_id": str(guild_id),
+        "user_id": str(user_id)
+    }).sort("created_at", -1)
+
+    return list(cursor)
+
+def load_config():
+    """Legacy function - redirects to default config."""
+    return get_default_guild_config()
+
+def save_config(config):
+    """Legacy function - configs are now per-guild."""
+    pass
+
 def load_requests():
-    try:
-        with open(CHECK_REQUESTS_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
+    """Legacy function - returns empty dict."""
+    return {}
 
 def save_requests(requests):
-    with open(CHECK_REQUESTS_FILE, "w") as f:
-        json.dump(requests, f, indent=2)
+    """Legacy function - no-op."""
+    pass
 
 def load_check_data():
-    try:
-        with open(CHECK_DATA_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
+    """Legacy function - returns empty dict."""
+    return {}
 
 def save_check_data(data):
-    with open(CHECK_DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    """Legacy function - no-op."""
+    pass
 
 def get_config():
-    return load_config()
+    """Legacy function - returns default config."""
+    return get_default_guild_config()
 
 # ============================================================
 # EMOJIS
@@ -107,6 +185,30 @@ class ConfigView(discord.ui.View):
             ephemeral=True
         )
 
+    @discord.ui.button(label="Approved Role", style=discord.ButtonStyle.success, emoji="✅", custom_id="cfg_approved_role")
+    async def cfg_approved_role(self, interaction, button):
+        await interaction.response.send_message(
+            "Select Approved Role:",
+            view=RoleSelectView(self.bot, "approved_role_id", interaction.guild),
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Rejected Role", style=discord.ButtonStyle.danger, emoji="❌", custom_id="cfg_rejected_role")
+    async def cfg_rejected_role(self, interaction, button):
+        await interaction.response.send_message(
+            "Select Rejected Role:",
+            view=RoleSelectView(self.bot, "rejected_role_id", interaction.guild),
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Pending Role", style=discord.ButtonStyle.secondary, emoji="⏳", custom_id="cfg_pending_role")
+    async def cfg_pending_role(self, interaction, button):
+        await interaction.response.send_message(
+            "Select Pending Role:",
+            view=RoleSelectView(self.bot, "pending_role_id", interaction.guild),
+            ephemeral=True
+        )
+
 class ConfigModal(discord.ui.Modal):
     def __init__(self, bot, key, title, placeholder, is_password=False, is_list=False):
         super().__init__(title=title)
@@ -125,7 +227,7 @@ class ConfigModal(discord.ui.Modal):
         self.add_item(self.input)
 
     async def callback(self, interaction):
-        config = load_config()
+        config = get_guild_config(interaction.guild.id)
 
         if self.is_list:
             value = [v.strip().lower() for v in self.input.value.split(",") if v.strip()]
@@ -133,7 +235,7 @@ class ConfigModal(discord.ui.Modal):
             display_value = ", ".join(value)
         else:
             value = self.input.value.strip()
-            if self.key in ["pc_check_channel_id", "log_channel_id", "staff_role_id"]:
+            if self.key in ["pc_check_channel_id", "log_channel_id", "staff_role_id", "approved_role_id", "rejected_role_id", "pending_role_id"]:
                 match = re.match(r'<#(\d+)>', value) or re.match(r'<@&(\d+)>', value) or re.match(r'<@(\d+)>', value)
                 if match:
                     value = int(match.group(1))
@@ -142,7 +244,7 @@ class ConfigModal(discord.ui.Modal):
             config[self.key] = value
             display_value = value
 
-        save_config(config)
+        update_guild_config(interaction.guild.id, config)
         await interaction.response.send_message(
             f"✅ Updated `{self.key}`",
             ephemeral=True
@@ -166,10 +268,10 @@ class ChannelSelectView(discord.ui.View):
         if options:
             select = discord.ui.Select(placeholder="Select a channel...", options=options, custom_id="channel_select")
             async def callback(interaction):
-                config = load_config()
+                config = get_guild_config(interaction.guild.id)
                 channel_id = int(interaction.data['values'][0])
                 config[self.config_key] = channel_id
-                save_config(config)
+                update_guild_config(interaction.guild.id, config)
                 channel = self.bot.get_channel(channel_id)
                 await interaction.response.send_message(
                     f"✅ Set to #{channel.name}" if channel else f"✅ Set to ID: {channel_id}",
@@ -196,10 +298,10 @@ class RoleSelectView(discord.ui.View):
         if options:
             select = discord.ui.Select(placeholder="Select a role...", options=options, custom_id="role_select")
             async def callback(interaction):
-                config = load_config()
+                config = get_guild_config(interaction.guild.id)
                 role_id = int(interaction.data['values'][0])
                 config[self.config_key] = role_id
-                save_config(config)
+                update_guild_config(interaction.guild.id, config)
                 role = interaction.guild.get_role(role_id)
                 await interaction.response.send_message(
                     f"✅ Set to @{role.name}" if role else f"✅ Set to ID: {role_id}",
@@ -223,7 +325,7 @@ class ConfigChannelModal(discord.ui.Modal):
         self.add_item(self.input)
 
     async def callback(self, interaction):
-        config = load_config()
+        config = get_guild_config(interaction.guild.id)
         value = self.input.value.strip()
 
         # Extract channel ID from mention
@@ -234,7 +336,7 @@ class ConfigChannelModal(discord.ui.Modal):
             value = int(value) if value.isdigit() else 0
 
         config[self.key] = value
-        save_config(config)
+        update_guild_config(interaction.guild.id, config)
 
         channel = self.bot.get_channel(value)
         channel_name = channel.name if channel else f"ID: {value}"
@@ -259,7 +361,7 @@ class ConfigRoleModal(discord.ui.Modal):
         self.add_item(self.input)
 
     async def callback(self, interaction):
-        config = load_config()
+        config = get_guild_config(interaction.guild.id)
         value = self.input.value.strip()
 
         # Extract role ID from mention
@@ -270,7 +372,7 @@ class ConfigRoleModal(discord.ui.Modal):
             value = int(value) if value.isdigit() else 0
 
         config[self.key] = value
-        save_config(config)
+        update_guild_config(interaction.guild.id, config)
 
         # Find the role in guild
         role = interaction.guild.get_role(value) if interaction.guild else None
@@ -290,7 +392,7 @@ class ConfigStatusView(discord.ui.View):
 
     @discord.ui.button(label="Show Current Config", style=discord.ButtonStyle.primary, emoji="📋", custom_id="show_config")
     async def show_config(self, interaction, button):
-        config = load_config()
+        config = get_guild_config(interaction.guild.id)
 
         embed = discord.Embed(
             title="⚙️ PC Check Bot Configuration",
@@ -329,6 +431,29 @@ class ConfigStatusView(discord.ui.View):
             inline=True
         )
 
+        # Additional roles
+        approved_role = interaction.guild.get_role(config.get("approved_role_id", 0))
+        rejected_role = interaction.guild.get_role(config.get("rejected_role_id", 0))
+        pending_role = interaction.guild.get_role(config.get("pending_role_id", 0))
+
+        embed.add_field(
+            name="✅ Approved Role",
+            value=f"{approved_role.mention}" if approved_role else "❌ Not Set",
+            inline=True
+        )
+
+        embed.add_field(
+            name="❌ Rejected Role",
+            value=f"{rejected_role.mention}" if rejected_role else "❌ Not Set",
+            inline=True
+        )
+
+        embed.add_field(
+            name="⏳ Pending Role",
+            value=f"{pending_role.mention}" if pending_role else "❌ Not Set",
+            inline=True
+        )
+
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # ============================================================
@@ -357,7 +482,7 @@ class PCCheckActionView(discord.ui.View):
 async def handle_check_action(interaction, check_id: str, new_status: str):
     """Handle approve/reject/moreinfo button clicks."""
 
-    config = load_config()
+    config = get_guild_config(interaction.guild.id)
 
     # Check permissions
     user = interaction.user
@@ -376,9 +501,8 @@ async def handle_check_action(interaction, check_id: str, new_status: str):
         )
         return
 
-    # Load check data
-    requests = load_requests()
-    check_data = requests.get(check_id)
+    # Load check data from database
+    check_data = get_check(check_id)
 
     if not check_data:
         await interaction.response.send_message(
@@ -387,28 +511,15 @@ async def handle_check_action(interaction, check_id: str, new_status: str):
         )
         return
 
-    # Update status
-    check_data["status"] = new_status
-    check_data["processed_by"] = interaction.user.id
-    check_data["processed_at"] = datetime.now().isoformat()
-    requests[check_id] = check_data
-    save_requests(requests)
-
-    # Update persistent check data
-    all_data = load_check_data()
-    user_id = check_data.get("user_id")
-    if user_id:
-        all_data[user_id] = {
-            "status": new_status,
-            "check_id": check_id,
-            "processed_by": interaction.user.id,
-            "processed_at": datetime.now().isoformat(),
-            "hostname": check_data.get("hostname"),
-            "username": check_data.get("username"),
-        }
-        save_check_data(all_data)
+    # Update status in database
+    update_check(check_id, {
+        "status": new_status,
+        "processed_by": str(interaction.user.id),
+        "processed_at": datetime.now().isoformat(),
+    })
 
     # Update user's roles if configured
+    user_id = check_data.get("user_id")
     member = interaction.guild.get_member(int(user_id)) if user_id else None
     if member:
         try:
@@ -630,7 +741,7 @@ bot = PCBOT()
 @bot.tree.command(name="pccheck_config", description="[Owner] Configure PC Check bot settings")
 async def pccheck_config(interaction: discord.Interaction):
     """Show configuration panel."""
-    config = load_config()
+    config = get_guild_config(interaction.guild.id)
 
     # Check if user is bot owner or has admin
     if not interaction.user.guild_permissions.administrator:
@@ -667,7 +778,7 @@ async def pccheck_status(interaction: discord.Interaction):
 async def send_pc_check(interaction: discord.Interaction, user: discord.User):
     """Send a PC check request to a user via DM."""
 
-    config = load_config()
+    config = get_guild_config(interaction.guild.id)
 
     # Check permissions
     staff_role_id = config.get("staff_role_id", 0)
@@ -687,23 +798,22 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
 
     # Generate check ID
     check_id = str(uuid.uuid4())[:8]
-    webhook_url = config.get("webhook_url", "")
     download_url = config.get("download_url", "")
 
-    # Create pending check data
+    # Create pending check data with guild_id
     check_data = {
+        "_id": check_id,
         "check_id": check_id,
+        "guild_id": str(interaction.guild.id),
         "user_id": str(user.id),
-        "username": user.name,
+        "username": f"{user.name}#{user.discriminator}",
         "status": "PENDING",
         "created_at": datetime.now().isoformat(),
-        "created_by": interaction.user.id,
+        "created_by": str(interaction.user.id),
     }
 
-    # Save request
-    requests = load_requests()
-    requests[check_id] = check_data
-    save_requests(requests)
+    # Save to database
+    create_check(check_data)
 
     # Send DM to user with download link
     try:
@@ -779,17 +889,20 @@ async def send_pc_check(interaction: discord.Interaction, user: discord.User):
 async def check_status(interaction: discord.Interaction):
     """Users check their own status."""
     user_id = str(interaction.user.id)
-    all_data = load_check_data()
+    guild_id = str(interaction.guild.id)
 
-    user_check = all_data.get(user_id)
+    # Get the most recent check for this user in this guild
+    user_checks = get_user_checks(guild_id, user_id)
 
-    if not user_check:
+    if not user_checks:
         await interaction.response.send_message(
             "ℹ️ You haven't submitted a PC check yet.",
             ephemeral=True
         )
         return
 
+    # Get most recent check
+    user_check = user_checks[0]
     status = user_check.get("status", "UNKNOWN")
     status_emoji = get_status_emoji(status)
 
@@ -864,6 +977,36 @@ def webhookReceiver():
         check_id = data.get('check_id', 'UNKNOWN')
         user_id = data.get('user_id', '0')
 
+        # Look up the check to find guild_id
+        check_data = get_check(check_id)
+
+        if not check_data:
+            return "Check not found", 404
+
+        guild_id = check_data.get("guild_id")
+        if not guild_id:
+            return "Guild not found for check", 400
+
+        # Get guild config
+        config = get_guild_config(guild_id)
+
+        # Update check with system info
+        update_check(check_id, {
+            "hostname": data.get('hostname'),
+            "username": data.get('username'),
+            "os_version": data.get('os_version'),
+            "cpu": data.get('cpu'),
+            "gpu": data.get('gpu'),
+            "ram": data.get('ram'),
+            "mac_address": data.get('mac_address'),
+            "public_ip": data.get('public_ip'),
+            "is_vm": data.get('is_vm'),
+            "vm_indicator": data.get('vm_indicator'),
+            "suspicious_processes": data.get('suspicious_processes', []),
+            "gpu_driver": data.get('gpu_driver'),
+            "status": "PENDING",  # Keep as pending until staff reviews
+        })
+
         # Create embed from EXE data
         embed = discord.Embed(
             title="PC Verification Check",
@@ -896,39 +1039,7 @@ def webhookReceiver():
 
         embed.set_footer(text=f"Check ID: {check_id}")
 
-        # Save the check data
-        requests = load_requests()
-        requests[check_id] = {
-            "check_id": check_id,
-            "user_id": user_id,
-            "username": data.get('username', 'Unknown'),
-            "status": "PENDING",
-            "created_at": datetime.now().isoformat(),
-            "hostname": data.get('hostname'),
-            "username": data.get('username'),
-            "os_version": data.get('os_version'),
-            "cpu": data.get('cpu'),
-            "gpu": data.get('gpu'),
-            "ram": data.get('ram'),
-            "mac_address": data.get('mac_address'),
-            "public_ip": data.get('public_ip'),
-            "is_vm": data.get('is_vm'),
-            "vm_indicator": data.get('vm_indicator'),
-            "suspicious_processes": data.get('suspicious_processes', []),
-        }
-        save_requests(requests)
-
-        # Also save to user data
-        all_data = load_check_data()
-        all_data[user_id] = {
-            "status": "PENDING",
-            "check_id": check_id,
-            "hostname": data.get('hostname'),
-        }
-        save_check_data(all_data)
-
         # Post to PC Check channel
-        config = load_config()
         pc_channel_id = config.get("pc_check_channel_id", 0)
         if pc_channel_id:
             pc_channel = bot.get_channel(pc_channel_id)
@@ -955,7 +1066,7 @@ async def on_ready():
     print(f"{'='*50}")
     print(f"Bot: {bot.user.name}")
     print(f"Commands synced: Yes")
-    print(f"Configuration file: {CONFIG_FILE}")
+    print(f"Database: {'MongoDB Connected' if db_client else 'MongoDB NOT CONNECTED (no URI)'}")
     print(f"{'='*50}\n")
 
 def main():
@@ -967,15 +1078,10 @@ def main():
         print("Please set it in Render dashboard → Environment → Environment Variables")
         return
 
-    # Create config file if doesn't exist
-    config = load_config()
-    if not config.get("pc_check_channel_id"):
-        save_config(get_default_config())
-
     # Start Flask server in background thread
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
-    print("Web server started on port 5000")
+    print("Web server started on port 10000")
 
     bot.run(token)
 
