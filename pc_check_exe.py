@@ -264,7 +264,6 @@ def main():
     print("-" * 45, flush=True)
     print("By running this tool, you agree to:", flush=True)
     print("  - Your system information being collected", flush=True)
-    print("  - IP address being logged for security", flush=True)
     print("  - Results being reviewed by server staff", flush=True)
     print("  - Being banned if cheating software detected", flush=True)
     print("-" * 45, flush=True)
