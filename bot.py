@@ -824,6 +824,14 @@ class PCBOT(commands.Bot):
     async def setup_hook(self):
         await self.tree.sync()
 
+    async def on_interaction(self, interaction):
+        print(f"Received interaction: {interaction.data}")
+        await self.process_interaction(interaction)
+
+    async def process_interaction(self, interaction):
+        # Let Discord handle button callbacks
+        pass
+
 bot = PCBOT()
 
 # ============================================================
